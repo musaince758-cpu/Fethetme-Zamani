@@ -1,0 +1,2647 @@
+<!DOCTYPE html>
+<html lang="tr" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Fethetme Zamanı — Dünya Fethi Strateji Oyunu</title>
+  <!-- Google Fonts: Space Grotesk & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- D3 & TopoJSON for Interactive 195-Country World Map -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/topojson-client@3"></script>
+  <!-- Tone.js for Royalty-Free Procedural Strategy Ambient Music & SFX -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            bg: '#000000',
+            card: '#0D0D0D',
+            muted: '#171717',
+            border: '#262626',
+            primary: '#D4A359',
+            primaryDark: '#B88940',
+            foreground: '#F5F5F5',
+            mutedFg: '#A3A3A3',
+            owned: '#DC2626',
+            ownedBright: '#4FA87B',
+            danger: '#EF4444'
+          },
+          fontFamily: {
+            heading: ['"Space Grotesk"', 'sans-serif'],
+            body: ['"Inter"', 'sans-serif'],
+          },
+          borderRadius: {
+            theme: '16px',
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background-color: #000000;
+      color: #F5F5F5;
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+    h1, h2, h3, .font-heading {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #000000;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #262626;
+      border-radius: 9999px;
+    }
+    .country-path, .microstate-territory {
+      transition: fill 0.22s ease, stroke 0.22s ease, opacity 0.2s ease;
+      cursor: pointer;
+    }
+    .country-path:hover, .microstate-territory:hover {
+      opacity: 0.88;
+    }
+    #world-map-wrapper {
+      touch-action: none;
+      cursor: grab;
+    }
+    #world-map-wrapper:active {
+      cursor: grabbing;
+    }
+    @keyframes pulseGold {
+      0%, 100% { filter: drop-shadow(0 0 2px rgba(212, 163, 89, 0.55)); }
+      50% { filter: drop-shadow(0 0 7px rgba(212, 163, 89, 0.95)); }
+    }
+    .selected-country-glow {
+      animation: pulseGold 2.2s infinite ease-in-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-slide-up {
+      animation: slideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes screenShake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+    .animate-shake {
+      animation: screenShake 0.35s ease-in-out;
+    }
+    @keyframes floatUpFade {
+      0% { transform: translateY(0) scale(0.95); opacity: 1; }
+      100% { transform: translateY(-22px) scale(1.05); opacity: 0; }
+    }
+    .animate-float-gold {
+      animation: floatUpFade 0.95s ease-out forwards;
+    }
+    @keyframes supplyPlaneGlow {
+      0%, 100% {
+        filter: drop-shadow(0 0 6px rgba(243, 208, 138, 0.9)) drop-shadow(0 0 14px rgba(212, 163, 89, 0.7));
+      }
+      50% {
+        filter: drop-shadow(0 0 11px rgba(255, 248, 220, 1)) drop-shadow(0 0 22px rgba(212, 163, 89, 0.95));
+      }
+    }
+    @keyframes navStrobe {
+      0%, 45%, 100% { opacity: 0.25; }
+      50%, 65% { opacity: 1; }
+    }
+    .supply-plane-glow {
+      animation: supplyPlaneGlow 1.25s infinite ease-in-out;
+      cursor: pointer;
+    }
+    .plane-nav-strobe {
+      animation: navStrobe 1.1s infinite ease-in-out;
+    }
+    .country-badge-group {
+      cursor: pointer;
+      transition: filter 0.18s ease;
+    }
+    .country-badge-group:hover {
+      filter: brightness(1.18);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex justify-center bg-black">
+
+  <!-- Main Mobile-First App Shell -->
+  <div id="app" class="w-full max-w-[480px] min-h-screen bg-bg border-x border-border/80 flex flex-col relative shadow-2xl">
+
+    <!-- Top Persistent Tactical HUD -->
+    <header class="sticky top-0 z-30 bg-bg/95 backdrop-blur-md border-b border-border/70 px-3.5 pt-2.5 pb-2.5 flex items-center justify-between gap-1.5">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <!-- Custom SVG Emblem Logo: Fethetme Zamanı -->
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1D1710] via-[#111111] to-[#1F0B0B] border border-primary/70 flex items-center justify-center shrink-0 shadow-md relative overflow-hidden">
+          <svg viewBox="0 0 40 40" class="w-7 h-7" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="fzGold" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#F3D08A" />
+                <stop offset="50%" stop-color="#D4A359" />
+                <stop offset="100%" stop-color="#9A6B26" />
+              </linearGradient>
+              <linearGradient id="fzRed" x1="12" y1="10" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#EF4444" />
+                <stop offset="100%" stop-color="#991B1B" />
+              </linearGradient>
+            </defs>
+            <!-- Outer Tactical Shield -->
+            <path d="M20 3L33 8.5V19.5C33 27.6 27.4 34.4 20 37C12.6 34.4 7 27.6 7 19.5V8.5L20 3Z" fill="#0D0D0D" stroke="url(#fzGold)" stroke-width="2" />
+            <!-- Inner Crimson Conquest Core & Globe Rings -->
+            <circle cx="20" cy="19.5" r="8.5" fill="url(#fzRed)" fill-opacity="0.25" stroke="url(#fzRed)" stroke-width="1.4" />
+            <ellipse cx="20" cy="19.5" rx="4" ry="8.5" stroke="url(#fzGold)" stroke-width="1.1" />
+            <line x1="11.5" y1="19.5" x2="28.5" y2="19.5" stroke="url(#fzGold)" stroke-width="1.1" />
+            <!-- Crossed Tactical Blades -->
+            <path d="M13 12.5L27 26.5M27 12.5L13 26.5" stroke="url(#fzGold)" stroke-width="1.8" stroke-linecap="round" />
+            <!-- Crown / North Star Accent -->
+            <circle cx="20" cy="8.5" r="1.6" fill="#F3D08A" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="text-[9px] font-bold tracking-[0.14em] text-primary uppercase">STRATEJİ OYUNU</div>
+          <div class="font-heading font-bold text-sm tracking-tight text-foreground truncate">FETHETME ZAMANI</div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 shrink-0">
+        <!-- Conquered Country Counter (X / 195) -->
+        <button onclick="switchTab('empire')" id="header-owned-badge" class="flex items-center gap-1 bg-card hover:bg-muted border border-border px-2 py-1 rounded-full transition" title="Fethedilen Ülkeler">
+          <span class="w-2 h-2 rounded-full bg-[#DC2626] inline-block"></span>
+          <span id="header-owned-val" class="text-[11px] font-bold text-foreground tabular-nums">0/195</span>
+        </button>
+
+        <!-- Army Power Pill -->
+        <button onclick="switchTab('army')" id="header-power-badge" class="hidden items-center gap-1 bg-card hover:bg-muted border border-border px-2 py-1 rounded-full transition" title="Ordu Gücü">
+          <i data-lucide="swords" class="w-3 h-3 text-primary"></i>
+          <span id="header-power-val" class="text-[11px] font-bold text-foreground tabular-nums">102</span>
+        </button>
+
+        <!-- Live Gold Balance + Income/sec Pill -->
+        <div class="relative flex items-center gap-1.5 bg-card border border-border px-2.5 py-1 rounded-full shadow-inner">
+          <span class="w-3.5 h-3.5 rounded-full bg-primary/20 border border-primary flex items-center justify-center text-[9px] text-primary font-bold">🪙</span>
+          <div class="flex items-baseline gap-1">
+            <span id="header-gold-val" class="text-[11px] font-bold text-primary tracking-wide tabular-nums">500</span>
+            <span id="header-income-rate" class="text-[10px] font-semibold text-ownedBright tabular-nums">+0/sn</span>
+          </div>
+          <div id="floating-gold-anchor" class="absolute -bottom-4 right-2 pointer-events-none"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Toast / Notification Banner -->
+    <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-[440px] pointer-events-none flex flex-col gap-2"></div>
+
+    <!-- Main Scrollable Content Area -->
+    <main id="main-content" class="flex-1 overflow-y-auto pb-24 px-4 pt-3.5">
+
+      <!-- ==================== TAB 1: HARİTA (WORLD MAP) ==================== -->
+      <section id="tab-map" class="space-y-3.5">
+        <!-- Hero Title Row -->
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <p id="map-eyebrow" class="text-xs font-medium text-mutedFg">Komutan, hoş geldin</p>
+            <h1 id="map-title" class="font-heading text-[24px] font-bold leading-tight text-foreground mt-0.5">Dünyayı fethet.</h1>
+            <p id="map-subtitle" class="text-xs text-mutedFg mt-0.5">195 ülkeden birini seç veya bayrak sembolüne dokun.</p>
+          </div>
+          <!-- Live Income Per Second Pill -->
+          <div id="live-income-badge" class="hidden flex-col items-end bg-card border border-border rounded-xl px-2.5 py-1.5 shrink-0">
+            <span class="text-[9px] uppercase tracking-wider text-mutedFg font-semibold">SANİYELİK GELİR</span>
+            <span id="map-income-sec-val" class="font-heading text-sm font-bold text-ownedBright tabular-nums">+0 🪙/sn</span>
+          </div>
+          <div id="compass-badge" class="w-9 h-9 rounded-full bg-card border border-border flex items-center justify-center text-primary shrink-0">
+            <i data-lucide="compass" class="w-4 h-4"></i>
+          </div>
+        </div>
+
+        <!-- Interactive World Map Box -->
+        <div class="bg-card border border-border rounded-theme p-3 shadow-lg">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+              <span class="text-[10px] font-bold tracking-[0.12em] text-mutedFg uppercase">DÜNYA HARİTASI (195 ÜLKE)</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <button id="zoom-in-btn" title="Yakınlaştır" class="w-7 h-7 rounded-md bg-bg border border-border flex items-center justify-center text-mutedFg hover:text-foreground text-sm font-bold">+</button>
+              <button id="zoom-out-btn" title="Uzaklaştır" class="w-7 h-7 rounded-md bg-bg border border-border flex items-center justify-center text-mutedFg hover:text-foreground text-sm font-bold">−</button>
+              <button id="zoom-reset-btn" title="Sıfırla" class="px-2 h-7 rounded-md bg-bg border border-border flex items-center justify-center text-mutedFg hover:text-foreground text-[10px] font-medium">Sıfırla</button>
+            </div>
+          </div>
+
+          <!-- SVG Map Viewport -->
+          <div id="world-map-wrapper" class="relative w-full aspect-[6/5] bg-black rounded-xl border border-border/80 overflow-hidden select-none">
+            <svg id="world-map-svg" class="w-full h-full block" viewBox="0 0 600 500" preserveAspectRatio="xMidYMid slice"></svg>
+            <div id="map-loading-overlay" class="absolute inset-0 flex items-center justify-center bg-bg/95 text-xs text-mutedFg">
+              195 ülke haritası yükleniyor...
+            </div>
+            <!-- Supply Plane Callout Pill (Visible when plane flies over) -->
+            <button
+              id="supply-plane-hud-pill"
+              onclick="openSupplyPlaneModal()"
+              class="hidden absolute top-2.5 right-2.5 z-20 items-center gap-1.5 bg-[#1D1710]/95 hover:bg-[#2A2014] border border-primary px-2.5 py-1 rounded-full shadow-lg animate-pulse"
+            >
+              <span class="text-xs">✈️</span>
+              <span class="text-[10px] font-bold text-primary tracking-wide">İkmal Uçağı!</span>
+            </button>
+            <div class="absolute bottom-2 left-2.5 pointer-events-none bg-bg/85 backdrop-blur-sm border border-border/70 px-2 py-0.5 rounded-md text-[10px] text-mutedFg">
+              Kaydır • Yakınlaştır • Bayrağa dokun
+            </div>
+          </div>
+
+          <!-- Map Legend -->
+          <div class="flex items-center justify-between mt-2.5 pt-1 text-[11px] text-mutedFg">
+            <div class="flex items-center gap-3">
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#DC2626] border border-[#FCA5A5] inline-block"></span>
+                <span>Fethedilen (Kırmızı)</span>
+              </span>
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-primary border border-primary inline-block"></span>
+                <span>Seçili</span>
+              </span>
+              <span class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#1F1F1F] border border-border inline-block"></span>
+                <span>Tarafsız</span>
+              </span>
+            </div>
+            <span id="zoom-level-indicator" class="text-[10px] text-mutedFg font-mono">1.0x</span>
+          </div>
+        </div>
+
+        <!-- Quick Army Power Bar on Map Tab -->
+        <div id="map-quick-power-bar" class="hidden bg-card border border-border rounded-theme p-3 flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-xl bg-primary/15 border border-primary/40 flex items-center justify-center text-primary">
+              <i data-lucide="swords" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <div class="text-[10px] font-bold tracking-wider text-mutedFg uppercase">MEVCUT ORDU GÜCÜN</div>
+              <div id="map-quick-power-val" class="font-heading font-bold text-base text-foreground">102 Güç</div>
+            </div>
+          </div>
+          <button onclick="switchTab('army')" class="px-3 py-2 rounded-xl bg-primary/15 hover:bg-primary/25 border border-primary/50 text-primary text-xs font-bold transition">
+            Güç Yükselt →
+          </button>
+        </div>
+
+        <!-- Selected Country Action Card -->
+        <div class="bg-card border border-border rounded-theme p-4 space-y-3 shadow-lg">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <div id="sel-card-flag" class="w-12 h-12 rounded-full bg-bg border-2 border-primary flex items-center justify-center overflow-hidden shadow-inner shrink-0"></div>
+              <div class="min-w-0">
+                <div id="sel-card-tag" class="text-[10px] font-bold tracking-[0.12em] text-primary uppercase">BAŞLANGIÇ ÜLKESİ</div>
+                <h3 id="sel-card-name" class="font-heading text-lg font-bold text-foreground truncate">Türkiye</h3>
+                <div class="flex items-center gap-2.5 text-[11px] text-mutedFg mt-0.5">
+                  <span>Güç: <strong id="sel-card-def" class="text-foreground">26000</strong></span>
+                  <span>•</span>
+                  <span id="sel-card-income-sec" class="text-ownedBright font-semibold">+5 🪙/sn</span>
+                  <span>•</span>
+                  <span id="sel-card-rew" class="text-primary font-semibold">+5800 🪙</span>
+                </div>
+              </div>
+            </div>
+            <button id="sel-card-info-btn" title="Harekat Bilgisi" class="w-9 h-9 rounded-xl bg-bg hover:bg-muted border border-border flex items-center justify-center text-mutedFg hover:text-foreground shrink-0 transition">
+              <i data-lucide="crosshair" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <button id="sel-card-action-btn" class="w-full py-3 px-4 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.99] text-black font-bold text-sm flex items-center justify-center gap-2 transition shadow-md">
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            <span id="sel-card-action-text">Bu ülkeyle başla</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 2: ORDU (ARMY & MOBILIZATION) ==================== -->
+      <section id="tab-army" class="hidden space-y-4">
+        <div>
+          <p class="text-[10px] font-bold tracking-[0.14em] text-mutedFg uppercase">ASKERİ KARARGAH</p>
+          <h1 class="font-heading text-[24px] font-bold text-foreground mt-0.5">Ordu</h1>
+          <p class="text-xs text-mutedFg mt-0.5">Seferberlik paketleri ve süresiz ordu eğitimi ile gücünü artır.</p>
+        </div>
+
+        <!-- Empty State (Before Selecting Starting Country) -->
+        <div id="army-empty-state" class="bg-card border border-border rounded-theme p-6 text-center space-y-3">
+          <div class="w-12 h-12 rounded-2xl bg-bg border border-border flex items-center justify-center text-primary mx-auto">
+            <i data-lucide="swords" class="w-6 h-6"></i>
+          </div>
+          <h3 class="font-heading text-base font-bold text-foreground">Önce ülkeni seç</h3>
+          <p class="text-xs text-mutedFg">Ordunu kurmak için haritadan bir başlangıç ülkesi seç.</p>
+          <button onclick="switchTab('map')" class="w-full py-3 rounded-xl bg-primary hover:bg-primaryDark text-black font-bold text-xs transition">
+            Haritaya git
+          </button>
+        </div>
+
+        <!-- Active Army State -->
+        <div id="army-active-state" class="hidden space-y-3.5">
+          <!-- Total Power Banner -->
+          <div class="bg-card border border-border rounded-theme p-4 flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-bold tracking-[0.12em] text-mutedFg uppercase">TOPLAM ORDU GÜCÜ</span>
+              <div id="army-total-power" class="font-heading text-3xl font-bold text-primary mt-0.5">102</div>
+              <span id="army-income-summary" class="text-[11px] text-ownedBright font-medium">Pasif Gelir: +5 🪙/sn</span>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-primary/15 border border-primary/40 flex items-center justify-center text-primary">
+              <i data-lucide="shield-alert" class="w-6 h-6"></i>
+            </div>
+          </div>
+
+          <!-- General Army Power Upgrade (Seferberlik & Süresiz Ordu Eğitimi) -->
+          <div class="bg-gradient-to-br from-[#161616] to-card border border-primary/50 rounded-theme p-4 space-y-3.5 shadow-lg">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-primary/20 border border-primary flex items-center justify-center text-primary shrink-0">
+                  <i data-lucide="zap" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <h3 class="font-heading font-bold text-base text-foreground">Seferberlik & Eğitim</h3>
+                    <span id="global-tech-level-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-black">Eğitim Sv. 1</span>
+                  </div>
+                  <p class="text-[11px] text-mutedFg mt-0.5">Hızlı güç paketleriyle ordunu takviye et veya fiyatı arttıkça gücü de artan kalıcı Ordu Eğitimini yükselt.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Permanent Training Level Upgrade Button -->
+            <button
+              id="global-training-upgrade-btn"
+              onclick="upgradeGlobalTraining()"
+              class="w-full py-2.5 px-3 rounded-xl bg-bg hover:bg-muted border border-primary/60 text-primary font-bold text-xs flex items-center justify-between transition"
+            >
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="award" class="w-4 h-4"></i>
+                <span id="global-training-label">Süresiz Ordu Eğitimi Yükselt (+50 Güç)</span>
+              </span>
+              <span id="global-training-cost" class="font-heading font-bold">200 🪙</span>
+            </button>
+
+            <!-- 3 Quick Mobilization Power Packages (+25, +100, +500 Güç) -->
+            <div class="grid grid-cols-3 gap-2">
+              <button
+                id="pkg-btn-25"
+                onclick="buyPowerPackage(25, 100)"
+                class="py-2.5 px-2 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.98] text-black font-bold text-xs flex flex-col items-center justify-center gap-0.5 transition shadow"
+              >
+                <span class="font-heading text-sm">+25 Güç</span>
+                <span class="text-[10px] opacity-85">100 🪙</span>
+              </button>
+              <button
+                id="pkg-btn-100"
+                onclick="buyPowerPackage(100, 500)"
+                class="py-2.5 px-2 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.98] text-black font-bold text-xs flex flex-col items-center justify-center gap-0.5 transition shadow"
+              >
+                <span class="font-heading text-sm">+100 Güç</span>
+                <span class="text-[10px] opacity-85">500 🪙</span>
+              </button>
+              <button
+                id="pkg-btn-500"
+                onclick="buyPowerPackage(500, 2000)"
+                class="py-2.5 px-2 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.98] text-black font-bold text-xs flex flex-col items-center justify-center gap-0.5 transition shadow"
+              >
+                <span class="font-heading text-sm">+500 Güç</span>
+                <span class="text-[10px] opacity-85">2000 🪙</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 3: İMPARATORLUK (EMPIRE) ==================== -->
+      <section id="tab-empire" class="hidden space-y-4">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <p class="text-[10px] font-bold tracking-[0.14em] text-mutedFg uppercase">İLERLEME RAPORU</p>
+            <h1 class="font-heading text-[24px] font-bold text-foreground mt-0.5">İmparatorluk</h1>
+          </div>
+          <!-- Settings Button in Empire Header -->
+          <button
+            id="empire-settings-toggle-btn"
+            onclick="toggleEmpireSettingsPanel()"
+            title="Oyun Ayarları"
+            class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-card hover:bg-muted border border-border text-foreground text-xs font-semibold transition shadow-sm"
+          >
+            <i data-lucide="settings" class="w-4 h-4 text-primary"></i>
+            <span>Ayarlar</span>
+          </button>
+        </div>
+
+        <!-- Settings Card (Sound & Vibration Toggles) -->
+        <div id="empire-settings-card" class="bg-card border border-primary/40 rounded-theme p-4 space-y-3 shadow-lg">
+          <div class="flex items-center justify-between border-b border-border/70 pb-2.5">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-lg bg-primary/15 border border-primary/40 flex items-center justify-center text-primary">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h3 class="font-heading font-bold text-sm text-foreground">Oyun Ayarları</h3>
+                <p class="text-[10px] text-mutedFg">Fethetme Zamanı ses ve titreşim tercihleri</p>
+              </div>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-bg border border-border text-mutedFg">v1.0</span>
+          </div>
+
+          <!-- Background Music & SFX Toggle Row -->
+          <div class="flex items-center justify-between py-1">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-bg border border-border flex items-center justify-center text-primary">
+                <i id="setting-sound-icon" data-lucide="volume-2" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <div class="text-xs font-bold text-foreground">Arka Plan Sesi & Efektler</div>
+                <div id="setting-sound-desc" class="text-[10px] text-mutedFg">Telifsiz strateji müziği açık</div>
+              </div>
+            </div>
+            <button
+              id="toggle-sound-btn"
+              onclick="toggleSoundSetting()"
+              role="switch"
+              aria-checked="true"
+              class="w-12 h-6 rounded-full bg-primary p-0.5 transition-colors duration-200 flex items-center justify-end"
+            >
+              <span id="toggle-sound-knob" class="w-5 h-5 rounded-full bg-black shadow transition-transform duration-200"></span>
+            </button>
+          </div>
+
+          <!-- Vibration Toggle Row -->
+          <div class="flex items-center justify-between py-1 border-t border-border/50 pt-2.5">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-bg border border-border flex items-center justify-center text-primary">
+                <i id="setting-vibe-icon" data-lucide="smartphone" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <div class="text-xs font-bold text-foreground">Titreşim Geri Bildirimi</div>
+                <div id="setting-vibe-desc" class="text-[10px] text-mutedFg">Fetih ve dokunma titreşimi açık</div>
+              </div>
+            </div>
+            <button
+              id="toggle-vibe-btn"
+              onclick="toggleVibrationSetting()"
+              role="switch"
+              aria-checked="true"
+              class="w-12 h-6 rounded-full bg-primary p-0.5 transition-colors duration-200 flex items-center justify-end"
+            >
+              <span id="toggle-vibe-knob" class="w-5 h-5 rounded-full bg-black shadow transition-transform duration-200"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="empire-empty-state" class="bg-card border border-border rounded-theme p-6 text-center space-y-3">
+          <div class="w-12 h-12 rounded-2xl bg-bg border border-border flex items-center justify-center text-primary mx-auto">
+            <i data-lucide="flag" class="w-6 h-6"></i>
+          </div>
+          <h3 class="font-heading text-base font-bold text-foreground">Henüz bir ülken yok</h3>
+          <p class="text-xs text-mutedFg">İmparatorluğunun ilk adımı haritada seni bekliyor.</p>
+          <button onclick="switchTab('map')" class="w-full py-3 rounded-xl bg-primary hover:bg-primaryDark text-black font-bold text-xs transition">
+            Ülke seç
+          </button>
+        </div>
+
+        <!-- Active Empire State -->
+        <div id="empire-active-state" class="hidden space-y-4">
+          <div class="bg-card border border-border rounded-theme p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div id="empire-capital-flag" class="w-11 h-11 rounded-full bg-bg border-2 border-[#EF4444] flex items-center justify-center overflow-hidden"></div>
+                <div>
+                  <span class="text-[10px] font-bold tracking-wider text-mutedFg uppercase">BAŞKENT</span>
+                  <h3 id="empire-capital-name" class="font-heading text-base font-bold text-foreground">Türkiye</h3>
+                </div>
+              </div>
+              <div class="text-right">
+                <div id="empire-income-val" class="font-heading font-bold text-sm text-ownedBright">+5 🪙/sn</div>
+                <div id="empire-power-val" class="text-[11px] text-primary font-semibold">102 Güç</div>
+              </div>
+            </div>
+
+            <div class="space-y-1.5 pt-1">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-mutedFg">Dünya Hakimiyeti</span>
+                <span id="empire-progress-text" class="font-bold text-foreground">%1 • 1 / 195</span>
+              </div>
+              <div class="w-full h-2 rounded-full bg-bg overflow-hidden border border-border/60">
+                <div id="empire-progress-bar" class="h-full bg-[#DC2626] rounded-full transition-all duration-300" style="width: 1%"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <h3 class="font-heading font-bold text-sm text-foreground">Fethedilen Ülkeler</h3>
+            <span id="owned-count-badge" class="text-[11px] font-semibold text-mutedFg">1 ülke</span>
+          </div>
+
+          <div id="owned-countries-list" class="space-y-2"></div>
+
+          <button id="reset-game-btn" class="w-full py-3 px-4 rounded-xl bg-card hover:bg-danger/15 border border-danger/50 text-danger font-bold text-xs flex items-center justify-center gap-2 transition">
+            <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            <span>Yeni Oyun Başlat (İlerlemeyi Sıfırla)</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 4: GARAJ (GARAGE & UNLOCKABLE CARS) ==================== -->
+      <section id="tab-garage" class="hidden space-y-4">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <p class="text-[10px] font-bold tracking-[0.14em] text-mutedFg uppercase">ÖZEL KOLEKSİYON & FİLO</p>
+            <h1 class="font-heading text-[24px] font-bold text-foreground mt-0.5">Garaj</h1>
+            <p class="text-xs text-mutedFg mt-0.5">Ülkeleri fethederek o ülkenin ürettiği arabaların kilidini aç ve satın al.</p>
+          </div>
+          <div class="bg-card border border-border rounded-xl px-2.5 py-1.5 text-right shrink-0">
+            <div class="text-[9px] uppercase tracking-wider text-mutedFg font-semibold">GARAJ BONUSU</div>
+            <div id="garage-bonus-summary" class="font-heading text-xs font-bold text-primary">+0 Güç • +0/sn</div>
+          </div>
+        </div>
+
+        <!-- Garage Filter Chips -->
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1">
+          <button onclick="setGarageFilter('all')" id="garage-filter-all" class="px-3 py-1.5 rounded-full text-[11px] font-bold bg-primary text-black shrink-0 transition">
+            Tümü (24)
+          </button>
+          <button onclick="setGarageFilter('unlocked')" id="garage-filter-unlocked" class="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-card border border-border text-mutedFg hover:text-foreground shrink-0 transition">
+            Kilidi Açık
+          </button>
+          <button onclick="setGarageFilter('owned')" id="garage-filter-owned" class="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-card border border-border text-mutedFg hover:text-foreground shrink-0 transition">
+            Garajımdakiler
+          </button>
+          <button onclick="setGarageFilter('locked')" id="garage-filter-locked" class="px-3 py-1.5 rounded-full text-[11px] font-semibold bg-card border border-border text-mutedFg hover:text-foreground shrink-0 transition">
+            Kilitli
+          </button>
+        </div>
+
+        <!-- Cars Grid / List -->
+        <div id="garage-cars-list" class="space-y-3"></div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Tab Navigation Bar -->
+    <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] z-30 bg-bg/95 backdrop-blur-md border-t border-border px-3 py-2 flex items-center justify-around">
+      <button data-tab="map" class="nav-tab-btn flex flex-col items-center gap-1 py-1 px-3 text-primary transition">
+        <i data-lucide="map" class="w-5 h-5"></i>
+        <span class="text-[11px] font-semibold">Harita</span>
+      </button>
+      <button data-tab="army" class="nav-tab-btn flex flex-col items-center gap-1 py-1 px-3 text-mutedFg hover:text-foreground transition">
+        <i data-lucide="swords" class="w-5 h-5"></i>
+        <span class="text-[11px] font-semibold">Ordu</span>
+      </button>
+      <button data-tab="garage" class="nav-tab-btn flex flex-col items-center gap-1 py-1 px-3 text-mutedFg hover:text-foreground transition">
+        <i data-lucide="car" class="w-5 h-5"></i>
+        <span class="text-[11px] font-semibold">Garaj</span>
+      </button>
+      <button data-tab="empire" class="nav-tab-btn flex flex-col items-center gap-1 py-1 px-3 text-mutedFg hover:text-foreground transition">
+        <i data-lucide="shield" class="w-5 h-5"></i>
+        <span class="text-[11px] font-semibold">İmparatorluk</span>
+      </button>
+    </nav>
+
+    <!-- ==================== TACTICAL COUNTRY ACTION MODAL (SALDIR & GÜÇ) ==================== -->
+    <div id="country-modal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4">
+      <div id="country-modal-card" class="w-full max-w-[480px] bg-bg border-t sm:border border-border rounded-t-3xl sm:rounded-3xl p-5 space-y-4 animate-slide-up shadow-2xl max-h-[92vh] overflow-y-auto">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-mutedFg">Taktik Harekat Merkezi</span>
+          <button id="close-modal-btn" class="w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center text-mutedFg hover:text-foreground transition">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Circular Country Symbol & Identity -->
+        <div class="flex flex-col items-center text-center">
+          <div id="modal-flag-ring" class="w-20 h-20 rounded-full bg-card border-[3px] border-primary flex items-center justify-center overflow-hidden shadow-lg mb-2.5">
+          </div>
+          <div id="modal-tag" class="text-[10px] font-bold tracking-[0.14em] text-primary uppercase">BAŞLANGIÇ ÜLKESİ</div>
+          <h2 id="modal-name" class="font-heading text-2xl font-bold text-foreground mt-0.5">Türkiye</h2>
+          <p id="modal-difficulty" class="text-xs text-mutedFg mt-0.5">Zorluk seviyesi 3 / 5</p>
+        </div>
+
+        <!-- Ülkenin Gücü vs Senin Gücün + Saldırı Sonrası Kalan Gücün -->
+        <div class="bg-card border border-border rounded-theme p-4 space-y-3">
+          <div class="grid grid-cols-2 gap-3 pb-2.5 border-b border-border/70">
+            <div class="bg-bg/80 border border-border/70 rounded-xl p-3 text-center">
+              <div class="text-[10px] font-semibold uppercase tracking-wider text-mutedFg">ÜLKENİN GÜCÜ</div>
+              <div id="modal-defense" class="font-heading text-2xl font-bold text-danger mt-1">180</div>
+            </div>
+            <div class="bg-bg/80 border border-border/70 rounded-xl p-3 text-center">
+              <div class="text-[10px] font-semibold uppercase tracking-wider text-mutedFg">SENİN ORDU GÜCÜN</div>
+              <div id="modal-army-power" class="font-heading text-2xl font-bold text-primary mt-1">102</div>
+            </div>
+          </div>
+
+          <!-- Saldırı Sonrası Kalan Gücün -->
+          <div id="modal-post-combat-row" class="bg-bg/90 border border-border/80 rounded-xl px-3 py-2 flex items-center justify-between text-xs">
+            <span class="text-mutedFg font-medium">Saldırı Sonrası Kalan Gücün:</span>
+            <span id="modal-remaining-power" class="font-heading font-bold text-sm text-foreground">0 Güç</span>
+          </div>
+
+          <div class="space-y-2 pt-0.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="flex items-center gap-2 text-mutedFg">
+                <i data-lucide="trending-up" class="w-4 h-4 text-ownedBright"></i>
+                <span>Saniyelik kazanç katkısı</span>
+              </span>
+              <span id="modal-income" class="font-heading font-bold text-sm text-ownedBright">+7 🪙/sn</span>
+            </div>
+
+            <div class="flex items-center justify-between text-xs">
+              <span class="flex items-center gap-2 text-mutedFg">
+                <i data-lucide="coins" class="w-4 h-4 text-primary"></i>
+                <span>Anlık fetih ganimeti</span>
+              </span>
+              <span id="modal-reward" class="font-heading font-bold text-sm text-primary">+220 🪙</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tactical Guidance Note -->
+        <div id="modal-note-box" class="bg-card/60 border border-border/70 rounded-xl p-3 text-xs text-mutedFg leading-relaxed">
+          Bu ülkeyi seçerek oyuna başlayabilirsin.
+        </div>
+
+        <!-- Primary Modal Action Button (FETHET / BAŞLA) -->
+        <button id="modal-action-btn" class="w-full py-3.5 px-4 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.99] text-[#101916] font-bold text-sm flex items-center justify-center gap-2 transition shadow-lg">
+          <i data-lucide="plane" class="w-4 h-4"></i>
+          <span id="modal-action-text">Bu ülkeyle başla</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ==================== RESET CONFIRMATION MODAL ==================== -->
+    <div id="reset-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div class="w-full max-w-[380px] bg-card border border-border rounded-theme p-5 space-y-4 animate-slide-up shadow-2xl">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-danger/20 border border-danger/40 flex items-center justify-center text-danger">
+            <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-heading text-base font-bold text-foreground">Yeni Oyun Başlat</h3>
+            <p class="text-xs text-mutedFg">Mevcut ilerlemen sıfırlanacak</p>
+          </div>
+        </div>
+        <p class="text-xs text-mutedFg leading-relaxed">
+          Fethettiğin tüm ülkeler, birlik seviyelerin ve altın bakiyen sıfırlanacak. Yeni bir başlangıç ülkesi seçmek istiyor musun?
+        </p>
+        <div class="grid grid-cols-2 gap-2.5 pt-1">
+          <button id="cancel-reset-btn" class="py-2.5 px-3 rounded-xl bg-bg border border-border text-xs font-semibold text-foreground hover:bg-muted transition">
+            Vazgeç
+          </button>
+          <button id="confirm-reset-btn" class="py-2.5 px-3 rounded-xl bg-danger text-white text-xs font-bold hover:opacity-90 transition">
+            Evet, Sıfırla
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SUPPLY PLANE REWARDED AD MODAL ==================== -->
+    <div id="supply-plane-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div class="w-full max-w-[390px] bg-card border border-primary/70 rounded-theme p-5 space-y-4 animate-slide-up shadow-2xl">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold tracking-[0.14em] text-primary uppercase">HAVA İKMAL SANDIĞI</span>
+          <button id="close-supply-modal-btn" onclick="closeSupplyPlaneModal()" class="w-8 h-8 rounded-full bg-bg border border-border flex items-center justify-center text-mutedFg hover:text-foreground transition">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Glowing Plane Icon & Reward Amount -->
+        <div class="flex flex-col items-center text-center py-1">
+          <div class="w-16 h-16 rounded-full bg-gradient-to-br from-[#2B2112] to-bg border-2 border-primary flex items-center justify-center shadow-lg mb-3 supply-plane-glow">
+            <i data-lucide="plane" class="w-8 h-8 text-primary"></i>
+          </div>
+          <h3 class="font-heading text-xl font-bold text-foreground">Hava İkmal Uçağı Yakalandı!</h3>
+          <p class="text-xs text-mutedFg mt-1">Kısa reklamı izleyerek sandıktaki altın ödülünü hemen hazinene ekle.</p>
+
+          <div class="mt-3.5 w-full bg-bg border border-primary/40 rounded-xl py-3 px-4 flex items-center justify-center gap-2">
+            <span class="text-xl">🪙</span>
+            <span id="supply-reward-amount-text" class="font-heading text-2xl font-bold text-primary">+750 Altın</span>
+          </div>
+        </div>
+
+        <!-- Simulated Rewarded Ad Progress Box -->
+        <div id="ad-watching-box" class="hidden bg-bg border border-border rounded-xl p-3.5 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-primary flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+              <span>Sponsorlu Reklam Oynatılıyor...</span>
+            </span>
+            <span id="ad-countdown-text" class="font-heading font-bold text-foreground">5 sn</span>
+          </div>
+          <div class="w-full h-2 rounded-full bg-card overflow-hidden border border-border/70">
+            <div id="ad-progress-bar" class="h-full bg-primary rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <p class="text-[10px] text-mutedFg text-center">Ödülün hazırlanıyor, lütfen bekle...</p>
+        </div>
+
+        <!-- Watch Ad & Earn Button -->
+        <button
+          id="watch-ad-earn-btn"
+          onclick="startSupplyAdPlayback()"
+          class="w-full py-3.5 px-4 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.99] text-black font-bold text-sm flex items-center justify-center gap-2 transition shadow-lg"
+        >
+          <i data-lucide="play-circle" class="w-5 h-5"></i>
+          <span>Reklam İzle Kazan</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. VERİTABANI: DÜNYADAKİ TÜM 195 ÜLKE (193 BM Üyesi + Vatikan & Filistin)
+    // =========================================================================
+    const RAW_195_COUNTRIES = [
+      ['AFG','af','004','Afganistan',2,1350,550,9,66.0,33.9,0],
+      ['DEU','de','276','Almanya',5,32000,6800,72,10.4,51.2,0],
+      ['USA','us','840','A.B.D.',5,65000,14000,120,-98.5,39.5,0],
+      ['AND','ad','020','Andorra',1,130,110,3,1.5,42.5,1],
+      ['AGO','ao','024','Angola',2,1450,620,10,17.8,-11.2,0],
+      ['ATG','ag','028','Antigua ve Barbuda',1,110,95,2,-61.8,17.1,1],
+      ['ARG','ar','032','Arjantin',3,6800,2200,24,-63.6,-36.5,0],
+      ['ALB','al','008','Arnavutluk',2,680,320,6,20.1,41.1,0],
+      ['AUS','au','036','Avustralya',5,20000,4800,52,133.7,-25.2,0],
+      ['AUT','at','040','Avusturya',3,5400,1850,21,14.5,47.5,0],
+      ['AZE','az','031','Azerbaycan',2,1850,780,12,48.5,40.5,0],
+      ['BHS','bs','044','Bahamalar',1,280,165,4,-77.4,25.0,0],
+      ['BHR','bh','048','Bahreyn',2,720,380,7,50.5,26.0,1],
+      ['BGD','bd','050','Bangladeş',3,4200,1450,17,90.3,23.7,0],
+      ['BRB','bb','052','Barbados',1,140,115,3,-59.5,13.2,1],
+      ['BLR','by','112','Belarus',3,3800,1300,15,27.9,53.7,0],
+      ['BEL','be','056','Belçika',3,7600,2450,26,4.4,50.5,0],
+      ['BLZ','bz','084','Belize',1,210,135,3,-88.5,17.2,0],
+      ['BEN','bj','204','Benin',1,420,210,4,2.3,9.3,0],
+      ['BTN','bt','064','Bhutan',1,260,155,3,90.4,27.5,0],
+      ['ARE','ae','784','Birleşik Arap Emirlikleri',3,8900,3100,32,54.3,24.2,0],
+      ['GBR','gb','826','Birleşik Krallık',5,30000,6400,68,-3.4,54.8,0],
+      ['BOL','bo','068','Bolivya',2,1150,480,8,-63.5,-16.3,0],
+      ['BIH','ba','070','Bosna-Hersek',2,750,350,6,17.6,43.9,0],
+      ['BWA','bw','072','Botsvana',2,880,410,7,24.6,-22.3,0],
+      ['BRA','br','076','Brezilya',5,24000,5500,58,-51.9,-14.2,0],
+      ['BRN','bn','096','Brunei',1,360,210,5,114.7,4.5,0],
+      ['BGR','bg','100','Bulgaristan',2,1650,690,11,25.5,42.7,0],
+      ['BFA','bf','854','Burkina Faso',2,640,290,5,-1.5,12.2,0],
+      ['BDI','bi','108','Burundi',1,290,160,3,29.9,-3.3,0],
+      ['CPV','cv','132','Cabo Verde',1,135,110,3,-23.6,15.1,1],
+      ['DZA','dz','012','Cezayir',3,6400,2050,22,2.5,27.5,0],
+      ['DJI','dj','262','Cibuti',1,270,160,3,42.6,11.8,0],
+      ['TCD','td','148','Çad',2,820,360,6,18.7,15.4,0],
+      ['CZE','cz','203','Çekya',3,5600,1900,21,15.4,49.8,0],
+      ['CHN','cn','156','Çin',5,60000,12800,112,104.1,35.8,0],
+      ['DNK','dk','208','Danimarka',3,6100,2100,24,9.5,56.2,0],
+      ['TLS','tl','626','Doğu Timor',1,220,140,3,125.7,-8.8,0],
+      ['DOM','do','214','Dominik Cumhuriyeti',2,920,420,7,-70.1,18.7,0],
+      ['DMA','dm','212','Dominika',1,105,90,2,-61.3,15.4,1],
+      ['ECU','ec','218','Ekvador',2,1350,560,9,-78.1,-1.8,0],
+      ['GNQ','gq','226','Ekvator Ginesi',1,340,190,4,10.2,1.6,0],
+      ['SLV','sv','222','El Salvador',1,430,220,4,-88.9,13.7,0],
+      ['IDN','id','360','Endonezya',4,17500,4200,45,114.5,-1.5,0],
+      ['ERI','er','232','Eritre',1,390,200,4,39.7,15.1,0],
+      ['ARM','am','051','Ermenistan',2,780,360,6,45.0,40.1,0],
+      ['EST','ee','233','Estonya',2,1550,680,11,25.0,58.6,0],
+      ['SWZ','sz','748','Esvatini',1,320,180,3,31.5,-26.5,0],
+      ['ETH','et','231','Etiyopya',3,4500,1550,18,40.5,9.1,0],
+      ['MAR','ma','504','Fas',3,5200,1750,20,-7.1,31.8,0],
+      ['FJI','fj','242','Fiji',1,240,145,3,178.0,-17.7,0],
+      ['CIV','ci','384','Fildişi Sahili',2,1300,540,9,-5.5,7.5,0],
+      ['PHL','ph','608','Filipinler',3,6800,2200,24,121.8,12.9,0],
+      ['PSE','ps','275','Filistin',2,650,310,6,35.2,31.9,1],
+      ['FIN','fi','246','Finlandiya',3,7200,2350,25,25.7,61.9,0],
+      ['FRA','fr','250','Fransa',5,31000,6600,70,2.2,46.2,0],
+      ['GAB','ga','266','Gabon',1,460,230,4,11.6,-0.8,0],
+      ['GMB','gm','270','Gambiya',1,210,130,3,-15.3,13.4,1],
+      ['GHA','gh','288','Gana',2,1600,660,11,-1.0,7.9,0],
+      ['GIN','gn','324','Gine',1,480,240,5,-9.7,9.9,0],
+      ['GNB','gw','624','Gine-Bissau',1,200,125,3,-15.2,11.8,0],
+      ['GRD','gd','308','Grenada',1,115,95,2,-61.7,12.1,1],
+      ['GTM','gt','320','Guatemala',2,1100,470,8,-90.2,15.8,0],
+      ['GUY','gy','328','Guyana',1,380,200,4,-58.9,4.9,0],
+      ['ZAF','za','710','Güney Afrika',4,14500,3600,38,22.9,-30.6,0],
+      ['KOR','kr','410','Güney Kore',4,19500,4600,50,127.8,35.9,0],
+      ['SSD','ss','728','Güney Sudan',2,680,310,6,31.3,6.9,0],
+      ['GEO','ge','268','Gürcistan',2,1250,530,9,43.4,42.3,0],
+      ['HTI','ht','332','Haiti',1,390,200,4,-72.3,18.9,0],
+      ['HRV','hr','191','Hırvatistan',2,2100,850,13,15.2,45.1,0],
+      ['IND','in','356','Hindistan',5,45000,9800,92,78.9,20.6,0],
+      ['NLD','nl','528','Hollanda',4,15500,3800,41,5.3,52.1,0],
+      ['HND','hn','340','Honduras',2,790,360,6,-86.2,15.2,0],
+      ['IRQ','iq','368','Irak',3,5400,1850,21,43.7,33.2,0],
+      ['IRN','ir','364','İran',4,14000,3500,37,53.7,32.4,0],
+      ['IRL','ie','372','İrlanda',3,6500,2150,23,-8.2,53.4,0],
+      ['ESP','es','724','İspanya',4,18500,4400,47,-3.7,40.5,0],
+      ['ISR','il','376','İsrail',4,16000,3900,42,34.9,31.0,0],
+      ['SWE','se','752','İsveç',4,13500,3400,36,18.6,60.1,0],
+      ['CHE','ch','756','İsviçre',4,15000,3700,40,8.2,46.8,0],
+      ['ITA','it','380','İtalya',5,23000,5200,55,12.6,41.9,0],
+      ['ISL','is','352','İzlanda',2,1400,600,10,-19.0,64.9,0],
+      ['JAM','jm','388','Jamaika',1,450,230,4,-77.3,18.1,0],
+      ['JPN','jp','392','Japonya',5,29000,6200,66,138.3,36.2,0],
+      ['KHM','kh','116','Kamboçya',2,950,430,7,104.9,12.6,0],
+      ['CMR','cm','120','Kamerun',2,1150,490,8,12.4,7.4,0],
+      ['CAN','ca','124','Kanada',5,22000,5000,54,-106.3,56.1,0],
+      ['MNE','me','499','Karadağ',1,410,210,4,19.4,42.7,0],
+      ['QAT','qa','634','Katar',3,7800,2600,28,51.2,25.4,1],
+      ['KAZ','kz','398','Kazakistan',3,7400,2400,26,66.9,48.0,0],
+      ['KEN','ke','404','Kenya',2,1900,790,12,37.9,-0.0,0],
+      ['CYP','cy','196','Kıbrıs',2,1100,470,8,33.4,35.1,0],
+      ['KGZ','kg','417','Kırgızistan',2,820,370,6,74.8,41.2,0],
+      ['KIR','ki','296','Kiribati',1,95,85,2,-157.4,1.9,1],
+      ['COL','co','170','Kolombiya',3,5800,1950,22,-74.3,4.6,0],
+      ['COM','km','174','Komorlar',1,120,100,2,43.3,-11.6,1],
+      ['COG','cg','178','Kongo Cumhuriyeti',2,740,340,6,15.8,-0.2,0],
+      ['COD','cd','180','Kongo D.C.',3,3600,1250,15,21.8,-4.0,0],
+      ['CRI','cr','188','Kosta Rika',2,1250,530,9,-83.8,9.7,0],
+      ['KWT','kw','414','Kuveyt',3,5900,2000,22,47.5,29.3,0],
+      ['PRK','kp','408','Kuzey Kore',3,8500,2800,30,127.5,40.3,0],
+      ['MKD','mk','807','Kuzey Makedonya',2,690,320,6,21.7,41.6,0],
+      ['CUB','cu','192','Küba',2,1750,740,11,-77.8,21.5,0],
+      ['LAO','la','418','Laos',1,460,230,4,102.5,19.9,0],
+      ['LSO','ls','426','Lesotho',1,250,150,3,28.2,-29.6,0],
+      ['LVA','lv','428','Letonya',2,1450,620,10,24.6,56.9,0],
+      ['LBR','lr','430','Liberya',1,310,175,3,-9.4,6.4,0],
+      ['LBY','ly','434','Libya',2,1950,810,12,17.2,26.3,0],
+      ['LIE','li','438','Lihtenştayn',1,190,130,3,9.6,47.2,1],
+      ['LTU','lt','440','Litvanya',2,1750,730,11,23.9,55.2,0],
+      ['LBN','lb','422','Lübnan',2,980,440,7,35.9,33.9,0],
+      ['LUX','lu','442','Lüksemburg',2,2150,880,13,6.1,49.8,1],
+      ['HUN','hu','348','Macaristan',3,4600,1600,18,19.5,47.2,0],
+      ['MDG','mg','450','Madagaskar',2,760,350,6,46.9,-18.8,0],
+      ['MWI','mw','454','Malavi',1,370,195,4,34.3,-13.3,0],
+      ['MDV','mv','462','Maldivler',1,180,125,3,73.2,3.2,1],
+      ['MYS','my','458','Malezya',3,7900,2550,27,101.9,4.2,0],
+      ['MLI','ml','466','Mali',2,720,330,6,-4.0,17.6,0],
+      ['MLT','mt','470','Malta',1,350,195,4,14.4,35.9,1],
+      ['MHL','mh','584','Marshall Adaları',1,90,85,2,171.2,7.1,1],
+      ['MUS','mu','480','Mauritius',1,390,205,4,57.6,-20.3,1],
+      ['MEX','mx','484','Meksika',4,16500,4000,43,-102.6,23.6,0],
+      ['EGY','eg','818','Mısır',4,12500,3150,34,30.8,26.8,0],
+      ['FSM','fm','583','Mikronezya',1,95,85,2,150.6,7.4,1],
+      ['MNG','mn','496','Moğolistan',2,1050,460,8,103.8,46.9,0],
+      ['MDA','md','498','Moldova',1,470,235,5,28.4,47.4,0],
+      ['MCO','mc','492','Monako',1,220,145,3,7.4,43.7,1],
+      ['MRT','mr','478','Moritanya',1,490,245,5,-10.9,21.0,0],
+      ['MOZ','mz','508','Mozambik',2,890,410,7,35.5,-18.7,0],
+      ['MMR','mm','104','Myanmar',2,1850,780,12,95.9,21.9,0],
+      ['NAM','na','516','Namibya',2,840,385,7,18.5,-22.9,0],
+      ['NRU','nr','520','Nauru',1,90,85,2,166.9,-0.5,1],
+      ['NPL','np','524','Nepal',2,780,360,6,84.1,28.4,0],
+      ['NER','ne','562','Nijer',2,660,305,5,8.1,17.6,0],
+      ['NGA','ng','566','Nijerya',4,11500,2950,32,8.7,9.1,0],
+      ['NIC','ni','558','Nikaragua',1,480,240,5,-85.2,12.9,0],
+      ['NOR','no','578','Norveç',4,14200,3550,38,8.5,60.5,0],
+      ['CAF','cf','140','Orta Afrika Cum.',1,310,175,3,20.9,6.6,0],
+      ['UZB','uz','860','Özbekistan',3,3900,1350,16,64.6,41.4,0],
+      ['PAK','pk','586','Pakistan',4,13200,3300,35,69.3,30.4,0],
+      ['PLW','pw','585','Palau',1,95,85,2,134.6,7.5,1],
+      ['PAN','pa','591','Panama',2,1450,620,10,-80.8,8.5,0],
+      ['PNG','pg','598','Papua Yeni Gine',2,790,365,6,143.9,-6.3,0],
+      ['PRY','py','600','Paraguay',2,1150,490,8,-58.4,-23.4,0],
+      ['PER','pe','604','Peru',3,4900,1700,19,-75.0,-9.2,0],
+      ['POL','pl','616','Polonya',4,14800,3650,39,19.1,51.9,0],
+      ['PRT','pt','620','Portekiz',3,6400,2100,23,-8.2,39.4,0],
+      ['ROU','ro','642','Romanya',3,6100,2050,22,24.9,45.9,0],
+      ['RWA','rw','646','Ruanda',2,680,315,6,29.9,-1.9,0],
+      ['RUS','ru','643','Rusya',5,56000,12000,105,95.0,61.5,0],
+      ['KNA','kn','659','Saint Kitts ve Nevis',1,100,90,2,-62.8,17.4,1],
+      ['LCA','lc','662','Saint Lucia',1,115,95,2,-60.9,13.9,1],
+      ['VCT','vc','670','Saint Vincent ve Grenadinler',1,105,90,2,-61.3,13.3,1],
+      ['WSM','ws','882','Samoa',1,130,105,3,-172.1,-13.8,1],
+      ['SMR','sm','674','San Marino',1,125,105,3,12.5,43.9,1],
+      ['STP','st','678','Sao Tome ve Principe',1,110,95,2,6.6,0.2,1],
+      ['SEN','sn','686','Senegal',2,1150,490,8,-14.5,14.5,0],
+      ['SYC','sc','690','Seyşeller',1,140,115,3,55.5,-4.7,1],
+      ['SRB','rs','688','Sırbistan',2,2200,900,14,21.0,44.0,0],
+      ['SLE','sl','694','Sierra Leone',1,330,185,4,-11.8,8.5,0],
+      ['SGP','sg','702','Singapur',4,12000,3050,33,103.8,1.35,1],
+      ['SVK','sk','703','Slovakya',3,3700,1280,15,19.7,48.7,0],
+      ['SVN','si','705','Slovenya',2,2100,860,13,14.9,46.1,0],
+      ['SLB','sb','090','Solomon Adaları',1,195,130,3,160.2,-9.6,0],
+      ['SOM','so','706','Somali',1,440,225,4,46.2,5.2,0],
+      ['LKA','lk','144','Sri Lanka',2,1650,690,11,80.8,7.9,0],
+      ['SDN','sd','729','Sudan',2,1550,650,10,30.2,12.9,0],
+      ['SUR','sr','740','Surinam',1,310,175,3,-56.0,3.9,0],
+      ['SYR','sy','760','Suriye',2,1750,740,11,38.9,34.8,0],
+      ['SAU','sa','682','Suudi Arabistan',4,17000,4100,44,45.1,23.9,0],
+      ['CHL','cl','152','Şili',3,6700,2180,24,-71.5,-35.7,0],
+      ['TJK','tj','762','Tacikistan',2,760,350,6,71.3,38.9,0],
+      ['TZA','tz','834','Tanzanya',2,1700,710,11,34.9,-6.4,0],
+      ['THA','th','764','Tayland',3,8800,2950,31,100.9,15.9,0],
+      ['TGO','tg','768','Togo',1,380,200,4,0.8,8.6,0],
+      ['TON','to','776','Tonga',1,105,90,2,-175.2,-21.2,1],
+      ['TTO','tt','780','Trinidad ve Tobago',2,890,410,7,-61.2,10.7,1],
+      ['TUN','tn','788','Tunus',2,1850,780,12,9.5,33.9,0],
+      ['TUR','tr','792','Türkiye',4,26000,5800,60,35.2,39.0,0],
+      ['TKM','tm','795','Türkmenistan',2,1950,820,12,59.6,38.9,0],
+      ['TUV','tv','798','Tuvalu',1,90,85,2,177.6,-7.1,1],
+      ['UGA','ug','800','Uganda',2,1250,530,9,32.3,1.4,0],
+      ['UKR','ua','804','Ukrayna',4,11000,2850,31,31.2,48.4,0],
+      ['OMN','om','512','Umman',3,3800,1320,15,55.9,21.5,0],
+      ['URY','uy','858','Uruguay',2,1900,800,12,-55.8,-32.5,0],
+      ['JOR','jo','400','Ürdün',2,2150,880,13,36.2,30.6,0],
+      ['VUT','vu','548','Vanuatu',1,145,115,3,166.9,-15.4,1],
+      ['VAT','va','336','Vatikan',1,110,95,2,12.45,41.90,1],
+      ['VEN','ve','862','Venezuela',3,4100,1420,17,-66.6,6.4,0],
+      ['VNM','vn','704','Vietnam',3,7500,2450,26,108.3,14.1,0],
+      ['YEM','ye','887','Yemen',2,1150,490,8,48.5,15.6,0],
+      ['NZL','nz','554','Yeni Zelanda',3,6900,2250,24,174.9,-40.9,0],
+      ['GRC','gr','300','Yunanistan',3,6200,2050,22,21.8,39.1,0],
+      ['ZMB','zm','894','Zambiya',2,1050,460,8,27.8,-13.1,0],
+      ['ZWE','zw','716','Zimbabve',2,960,430,7,29.2,-19.0,0]
+    ];
+
+    const COUNTRIES_DATA = RAW_195_COUNTRIES.map(r => ({
+      id: r[0],
+      iso2: r[1],
+      numId: r[2],
+      name: r[3],
+      diff: r[4],
+      defense: r[5],
+      reward: r[6],
+      income: r[7],
+      coords: [r[8], r[9]],
+      isMicro: r[10] === 1,
+      px: 300,
+      py: 250
+    }));
+
+    const COUNTRY_MAP = {};
+    COUNTRIES_DATA.forEach(c => { COUNTRY_MAP[c.id] = c; });
+
+    function getCountryById(id) {
+      return COUNTRY_MAP[id] || COUNTRY_MAP['TUR'] || COUNTRIES_DATA[0];
+    }
+
+    function getFlagUrl(iso2) {
+      return `https://flagcdn.com/w80/${String(iso2 || 'tr').toLowerCase()}.png`;
+    }
+
+    function renderFlagHtml(country) {
+      const url = getFlagUrl(country.iso2);
+      return `<img src="${url}" alt="${country.name}" class="w-full h-full object-cover" onerror="this.onerror=null;this.src='https://placehold.co/80x80/171717/D4A359?text=${encodeURIComponent(country.id)}'" />`;
+    }
+
+    function getCountryIncomeContribution(country) {
+      if (!country) return 2;
+      if (gameState && gameState.home === country.id) return 5;
+      return country.diff >= 3 ? 3 : 2;
+    }
+
+    function calculateIncomePerSecond() {
+      if (!gameState || !gameState.home || !Array.isArray(gameState.owned)) return 0;
+      const territoryIncome = gameState.owned.reduce((sum, id) => {
+        const c = getCountryById(id);
+        return sum + getCountryIncomeContribution(c);
+      }, 0);
+      const garageIncome = (gameState.ownedCars || []).reduce((sum, carId) => {
+        const car = CARS_CATALOG.find(item => item.id === carId);
+        return sum + (car ? car.incomeBonus : 0);
+      }, 0);
+      return territoryIncome + garageIncome;
+    }
+
+    // =========================================================================
+    // 1C. ÜLKELERE GÖRE KİLİDİ AÇILAN ARABA KATALOĞU (24 ARAÇ)
+    // =========================================================================
+    const CARS_CATALOG = [
+      { id: 'car_togg_t10x', countryId: 'TUR', brand: 'TOGG', model: 'T10X V2 Uzun Menzil', quality: 'Premium SUV', tier: 3, price: 3200, powerBonus: 180, incomeBonus: 5, color: '#DC2626' },
+      { id: 'car_anadol_stc', countryId: 'TUR', brand: 'Anadol', model: 'STC-16 Klasik Spor', quality: 'Klasik', tier: 2, price: 1100, powerBonus: 65, incomeBonus: 5, color: '#F59E0B' },
+      { id: 'car_porsche_911', countryId: 'DEU', brand: 'Porsche', model: '911 GT3 RS', quality: 'Süper Spor', tier: 4, price: 9500, powerBonus: 540, incomeBonus: 5, color: '#EAB308' },
+      { id: 'car_mercedes_amg', countryId: 'DEU', brand: 'Mercedes-AMG', model: 'GT Black Series', quality: 'Lüks Performans', tier: 4, price: 8800, powerBonus: 490, incomeBonus: 5, color: '#94A3B8' },
+      { id: 'car_bmw_m4', countryId: 'DEU', brand: 'BMW', model: 'M4 Competition', quality: 'Spor Coupe', tier: 3, price: 4600, powerBonus: 260, incomeBonus: 5, color: '#3B82F6' },
+      { id: 'car_ferrari_sf90', countryId: 'ITA', brand: 'Ferrari', model: 'SF90 Stradale', quality: 'Hiper Otomobil', tier: 5, price: 16500, powerBonus: 980, incomeBonus: 5, color: '#EF4444' },
+      { id: 'car_lamborghini_rev', countryId: 'ITA', brand: 'Lamborghini', model: 'Revuelto V12', quality: 'Hiper Otomobil', tier: 5, price: 15800, powerBonus: 920, incomeBonus: 5, color: '#F97316' },
+      { id: 'car_bugatti_chiron', countryId: 'FRA', brand: 'Bugatti', model: 'Chiron Super Sport', quality: 'Efsanevi Hiper', tier: 5, price: 24000, powerBonus: 1500, incomeBonus: 5, color: '#2563EB' },
+      { id: 'car_renault_megane', countryId: 'FRA', brand: 'Renault', model: 'Megane R.S. Trophy', quality: 'Sportif', tier: 2, price: 1450, powerBonus: 85, incomeBonus: 5, color: '#FACC15' },
+      { id: 'car_aston_valkyrie', countryId: 'GBR', brand: 'Aston Martin', model: 'Valkyrie AMR', quality: 'Hiper Otomobil', tier: 5, price: 18500, powerBonus: 1120, incomeBonus: 5, color: '#10B981' },
+      { id: 'car_rolls_phantom', countryId: 'GBR', brand: 'Rolls-Royce', model: 'Phantom VIII', quality: 'Ultra Lüks', tier: 4, price: 11200, powerBonus: 620, incomeBonus: 5, color: '#A855F7' },
+      { id: 'car_ford_mustang', countryId: 'USA', brand: 'Ford', model: 'Mustang Shelby GT500', quality: 'Kaslı Spor', tier: 3, price: 4800, powerBonus: 280, incomeBonus: 5, color: '#1D4ED8' },
+      { id: 'car_tesla_plaid', countryId: 'USA', brand: 'Tesla', model: 'Model S Plaid', quality: 'Elektrikli Süper', tier: 4, price: 7600, powerBonus: 430, incomeBonus: 5, color: '#F43F5E' },
+      { id: 'car_nissan_gtr', countryId: 'JPN', brand: 'Nissan', model: 'GT-R Nismo R35', quality: 'Süper Spor', tier: 4, price: 7900, powerBonus: 450, incomeBonus: 5, color: '#E11D48' },
+      { id: 'car_toyota_supra', countryId: 'JPN', brand: 'Toyota', model: 'GR Supra 3.0', quality: 'Spor Coupe', tier: 3, price: 3600, powerBonus: 205, incomeBonus: 5, color: '#F87171' },
+      { id: 'car_koenigsegg_jesko', countryId: 'SWE', brand: 'Koenigsegg', model: 'Jesko Absolut', quality: 'Efsanevi Hiper', tier: 5, price: 22500, powerBonus: 1380, incomeBonus: 5, color: '#FBBF24' },
+      { id: 'car_hyundai_ioniq5n', countryId: 'KOR', brand: 'Hyundai', model: 'IONIQ 5 N', quality: 'Performans EV', tier: 3, price: 3400, powerBonus: 195, incomeBonus: 5, color: '#38BDF8' },
+      { id: 'car_cupra_formentor', countryId: 'ESP', brand: 'CUPRA', model: 'Formentor VZ5', quality: 'Sportif SUV', tier: 3, price: 3100, powerBonus: 175, incomeBonus: 5, color: '#D97706' },
+      { id: 'car_skoda_octavia', countryId: 'CZE', brand: 'Škoda', model: 'Octavia RS', quality: 'Günlük Performans', tier: 2, price: 1350, powerBonus: 80, incomeBonus: 5, color: '#22C55E' },
+      { id: 'car_dacia_duster', countryId: 'ROU', brand: 'Dacia', model: 'Duster 4x4 Extreme', quality: 'Ekonomik Arazi', tier: 1, price: 650, powerBonus: 40, incomeBonus: 5, color: '#84CC16' },
+      { id: 'car_lada_niva', countryId: 'RUS', brand: 'LADA', model: 'Niva Legend 4x4', quality: 'Klasik Arazi', tier: 1, price: 600, powerBonus: 38, incomeBonus: 5, color: '#FB923C' },
+      { id: 'car_tata_harrier', countryId: 'IND', brand: 'Tata', model: 'Harrier Dark Edition', quality: 'Standart SUV', tier: 2, price: 1200, powerBonus: 72, incomeBonus: 5, color: '#6366F1' },
+      { id: 'car_byd_yangwang', countryId: 'CHN', brand: 'BYD', model: 'Yangwang U9', quality: 'Süper Elektrikli', tier: 4, price: 8400, powerBonus: 470, incomeBonus: 5, color: '#EC4899' },
+      { id: 'car_lykan_hypersport', countryId: 'ARE', brand: 'W Motors', model: 'Lykan HyperSport', quality: 'Efsanevi Hiper', tier: 5, price: 21000, powerBonus: 1290, incomeBonus: 5, color: '#D4A359' }
+    ];
+
+    let currentGarageFilter = 'all';
+    const STORAGE_KEY = 'fethetme_zamani_save_v1';
+
+    function getDefaultState() {
+      return {
+        gold: 500,
+        home: null,
+        owned: [],
+        ownedCars: [],
+        selected: 'TUR',
+        trainingLevel: 1,
+        trainingPowerTotal: 0,
+        bonusPower: 0,
+        powerLost: 0,
+        soundEnabled: true,
+        vibrationEnabled: true
+      };
+    }
+
+    let gameState = loadState();
+    let currentTab = 'map';
+    let modalCountryId = null;
+    let isMapDragging = false;
+    let isSettingsExpanded = true;
+
+    // =========================================================================
+    // 1B. TELİFSİZ PROSEDÜREL STRATEJİ ARKA PLAN MÜZİĞİ (TONE.JS) & TİTREŞİM
+    // =========================================================================
+    let audioEngineStarted = false;
+    let bgMusicLoop = null;
+    let ambientPadSynth = null;
+    let ambientBassSynth = null;
+    let ambientArpSynth = null;
+    let sfxSynth = null;
+    let musicStepIndex = 0;
+
+    const AMBIENT_PROGRESSION = [
+      { pad: ['D3', 'A3', 'F4'], bass: 'D2', arp: ['A4', 'F4', 'D4', 'E4'] },
+      { pad: ['Bb2', 'F3', 'D4'], bass: 'Bb1', arp: ['F4', 'D4', 'Bb3', 'D4'] },
+      { pad: ['G2', 'D3', 'Bb3'], bass: 'G1', arp: ['D4', 'Bb3', 'G3', 'A3'] },
+      { pad: ['A2', 'E3', 'C#4'], bass: 'A1', arp: ['E4', 'C#4', 'A3', 'E4'] }
+    ];
+
+    async function initRoyaltyFreeAudio() {
+      if (typeof Tone === 'undefined') return;
+      try {
+        if (Tone.context.state !== 'running') {
+          await Tone.start();
+        }
+        if (!audioEngineStarted) {
+          const reverb = new Tone.Reverb({ decay: 4.5, wet: 0.48 }).toDestination();
+          const lowpass = new Tone.Filter(950, 'lowpass').connect(reverb);
+
+          ambientPadSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'triangle' },
+            envelope: { attack: 1.4, decay: 1.2, sustain: 0.55, release: 2.4 },
+            volume: -21
+          }).connect(lowpass);
+
+          ambientBassSynth = new Tone.Synth({
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.4, decay: 0.8, sustain: 0.6, release: 1.8 },
+            volume: -19
+          }).connect(lowpass);
+
+          ambientArpSynth = new Tone.Synth({
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.08, decay: 0.45, sustain: 0.1, release: 0.9 },
+            volume: -25
+          }).connect(reverb);
+
+          sfxSynth = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'triangle' },
+            envelope: { attack: 0.01, decay: 0.18, sustain: 0.05, release: 0.25 },
+            volume: -14
+          }).toDestination();
+
+          bgMusicLoop = new Tone.Loop((time) => {
+            if (!gameState.soundEnabled) return;
+            const bar = Math.floor(musicStepIndex / 4) % AMBIENT_PROGRESSION.length;
+            const beat = musicStepIndex % 4;
+            const chord = AMBIENT_PROGRESSION[bar];
+
+            if (beat === 0) {
+              ambientPadSynth.triggerAttackRelease(chord.pad, '1n', time);
+              ambientBassSynth.triggerAttackRelease(chord.bass, '2n', time);
+            }
+            const note = chord.arp[beat];
+            if (note) {
+              ambientArpSynth.triggerAttackRelease(note, '8n', time);
+            }
+            musicStepIndex++;
+          }, '2n');
+
+          Tone.Transport.bpm.value = 72;
+          bgMusicLoop.start(0);
+          Tone.Transport.start();
+          audioEngineStarted = true;
+        }
+
+        if (gameState.soundEnabled && Tone.Transport.state !== 'started') {
+          Tone.Transport.start();
+        }
+      } catch (err) {
+        console.warn('Ses motoru başlatılamadı:', err);
+      }
+    }
+
+    function playGameSfx(type = 'click') {
+      if (!gameState.soundEnabled || !audioEngineStarted || !sfxSynth) return;
+      try {
+        const now = Tone.now();
+        if (type === 'conquer') {
+          sfxSynth.triggerAttackRelease(['D4', 'F4', 'A4', 'D5'], '8n', now);
+        } else if (type === 'upgrade') {
+          sfxSynth.triggerAttackRelease(['A4', 'C#5', 'E5'], '16n', now);
+        } else if (type === 'error') {
+          sfxSynth.triggerAttackRelease(['G2', 'Ab2'], '16n', now);
+        } else {
+          sfxSynth.triggerAttackRelease(['D5'], '32n', now);
+        }
+      } catch (e) {}
+    }
+
+    function triggerHaptic(pattern = 18) {
+      if (!gameState.vibrationEnabled) return;
+      try {
+        if (navigator && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(pattern);
+        }
+      } catch (e) {}
+    }
+
+    function toggleSoundSetting() {
+      gameState.soundEnabled = !gameState.soundEnabled;
+      saveState();
+      if (gameState.soundEnabled) {
+        initRoyaltyFreeAudio().then(() => playGameSfx('click'));
+        showToast('Arka plan sesi ve efektler açıldı.', 'info');
+      } else {
+        if (typeof Tone !== 'undefined' && Tone.Transport) {
+          Tone.Transport.pause();
+        }
+        showToast('Oyun sesleri kapatıldı.', 'info');
+      }
+      triggerHaptic(15);
+      renderSettingsUI();
+    }
+
+    function toggleVibrationSetting() {
+      gameState.vibrationEnabled = !gameState.vibrationEnabled;
+      saveState();
+      if (gameState.vibrationEnabled) {
+        triggerHaptic([25, 40, 25]);
+        showToast('Titreşim geri bildirimi açıldı.', 'info');
+      } else {
+        showToast('Titreşim geri bildirimi kapatıldı.', 'info');
+      }
+      playGameSfx('click');
+      renderSettingsUI();
+    }
+
+    function toggleEmpireSettingsPanel() {
+      isSettingsExpanded = !isSettingsExpanded;
+      const card = document.getElementById('empire-settings-card');
+      if (card) {
+        if (isSettingsExpanded) {
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+        }
+      }
+      playGameSfx('click');
+      triggerHaptic(12);
+    }
+
+    function renderSettingsUI() {
+      const soundBtn = document.getElementById('toggle-sound-btn');
+      const soundDesc = document.getElementById('setting-sound-desc');
+      const soundIcon = document.getElementById('setting-sound-icon');
+
+      if (soundBtn && soundDesc && soundIcon) {
+        if (gameState.soundEnabled) {
+          soundBtn.className = 'w-12 h-6 rounded-full bg-primary p-0.5 transition-colors duration-200 flex items-center justify-end';
+          soundBtn.setAttribute('aria-checked', 'true');
+          soundDesc.textContent = 'Telifsiz strateji müziği açık';
+          soundIcon.setAttribute('data-lucide', 'volume-2');
+        } else {
+          soundBtn.className = 'w-12 h-6 rounded-full bg-muted border border-border p-0.5 transition-colors duration-200 flex items-center justify-start';
+          soundBtn.setAttribute('aria-checked', 'false');
+          soundDesc.textContent = 'Sesler kapalı';
+          soundIcon.setAttribute('data-lucide', 'volume-x');
+        }
+      }
+
+      const vibeBtn = document.getElementById('toggle-vibe-btn');
+      const vibeDesc = document.getElementById('setting-vibe-desc');
+
+      if (vibeBtn && vibeDesc) {
+        if (gameState.vibrationEnabled) {
+          vibeBtn.className = 'w-12 h-6 rounded-full bg-primary p-0.5 transition-colors duration-200 flex items-center justify-end';
+          vibeBtn.setAttribute('aria-checked', 'true');
+          vibeDesc.textContent = 'Fetih ve dokunma titreşimi açık';
+        } else {
+          vibeBtn.className = 'w-12 h-6 rounded-full bg-muted border border-border p-0.5 transition-colors duration-200 flex items-center justify-start';
+          vibeBtn.setAttribute('aria-checked', 'false');
+          vibeDesc.textContent = 'Titreşim kapalı';
+        }
+      }
+    }
+
+    let mapSvg = null;
+    let mapG = null;
+    let mapProjection = null;
+    let mapPathGenerator = null;
+    let worldCountriesFeatures = [];
+    let zoomBehavior = null;
+    let currentZoomK = 1;
+
+    let activeSupplyPlane = null;
+    let supplyPlaneAnimId = null;
+    let supplyPlaneSchedulerTimer = null;
+    let adCountdownTimer = null;
+    let isWatchingSupplyAd = false;
+
+    // =========================================================================
+    // 2. KAYIT YÖNETİMİ VE GÜÇ HESAPLAMALARI
+    // =========================================================================
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return getDefaultState();
+        const parsed = JSON.parse(raw);
+        return { ...getDefaultState(), ...parsed };
+      } catch (e) {
+        return getDefaultState();
+      }
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(gameState));
+      } catch (e) {
+        console.warn('Kayıt yapılamadı:', e);
+      }
+    }
+
+    function getTrainingNextGain(level = gameState.trainingLevel || 1) {
+      return Math.round(50 * Math.pow(1.42, level - 1));
+    }
+
+    function calculateTotalPower() {
+      const baseHQ = 102;
+      const garagePower = (gameState.ownedCars || []).reduce((sum, carId) => {
+        const car = CARS_CATALOG.find(item => item.id === carId);
+        return sum + (car ? car.powerBonus : 0);
+      }, 0);
+      const grossPower =
+        baseHQ +
+        (gameState.trainingPowerTotal || 0) +
+        (gameState.bonusPower || 0) +
+        garagePower;
+      return Math.max(0, grossPower - (gameState.powerLost || 0));
+    }
+
+    function getTrainingUpgradeCost() {
+      const lvl = gameState.trainingLevel || 1;
+      return Math.round(200 * Math.pow(1.42, lvl - 1));
+    }
+
+    // =========================================================================
+    // 3. BİLDİRİM & CANLI ALTIN ANİMASYON YARDIMCILARI
+    // =========================================================================
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      const styles = {
+        success: 'bg-card border-[#EF4444]/80 text-foreground',
+        gold: 'bg-card border-primary/80 text-foreground',
+        danger: 'bg-card border-danger/80 text-foreground',
+        info: 'bg-card border-border text-foreground'
+      };
+      el.className = `px-3.5 py-2.5 rounded-xl border text-xs font-medium shadow-xl backdrop-blur-md animate-slide-up flex items-center gap-2 ${styles[type] || styles.info}`;
+      el.innerHTML = `<span class="w-2 h-2 rounded-full ${type === 'danger' ? 'bg-danger' : type === 'success' ? 'bg-[#EF4444]' : 'bg-primary'} shrink-0"></span><span>${msg}</span>`;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transition = 'opacity 0.25s ease';
+        setTimeout(() => el.remove(), 260);
+      }, 2600);
+    }
+
+    function spawnFloatingGold(amount) {
+      const anchor = document.getElementById('floating-gold-anchor');
+      if (!anchor) return;
+      const tag = document.createElement('span');
+      tag.className = 'animate-float-gold text-[10px] font-bold text-ownedBright whitespace-nowrap block';
+      tag.textContent = `+${amount} 🪙`;
+      anchor.appendChild(tag);
+      setTimeout(() => tag.remove(), 980);
+    }
+
+    // =========================================================================
+    // 4. D3 INTERAKTİF 195 ÜLKE HARİTASI + ANINDA ÇALIŞAN FALLBACK KITA KATMANI
+    // =========================================================================
+    function getBestCountryPolygon(feature) {
+      const geom = feature.geometry;
+      if (!geom) return feature;
+      if (geom.type === 'Polygon') return feature;
+      if (geom.type === 'MultiPolygon') {
+        let bestPoly = geom.coordinates[0];
+        let maxArea = -1;
+        for (const polyCoords of geom.coordinates) {
+          const singleFeature = { type: 'Feature', geometry: { type: 'Polygon', coordinates: polyCoords } };
+          const area = d3.geoArea(singleFeature);
+          if (area > maxArea) {
+            maxArea = area;
+            bestPoly = polyCoords;
+          }
+        }
+        return { type: 'Feature', geometry: { type: 'Polygon', coordinates: bestPoly } };
+      }
+      return feature;
+    }
+
+    function renderFallbackContinents() {
+      if (!mapG) return;
+      const fallbackG = mapG.append('g').attr('id', 'fallback-continents-layer').attr('opacity', 0.55);
+      const regions = [
+        { x: 75, y: 120, w: 135, h: 95, rx: 24 },   // Kuzey Amerika
+        { x: 145, y: 235, w: 78, h: 125, rx: 20 },  // Güney Amerika
+        { x: 265, y: 95, w: 95, h: 75, rx: 18 },    // Avrupa
+        { x: 262, y: 185, w: 105, h: 135, rx: 22 }, // Afrika
+        { x: 365, y: 100, w: 165, h: 130, rx: 28 }, // Asya
+        { x: 445, y: 285, w: 95, h: 65, rx: 18 }    // Okyanusya
+      ];
+      regions.forEach(r => {
+        fallbackG.append('rect')
+          .attr('x', r.x)
+          .attr('y', r.y)
+          .attr('width', r.w)
+          .attr('height', r.h)
+          .attr('rx', r.rx)
+          .attr('fill', '#141414')
+          .attr('stroke', '#2B2B2B')
+          .attr('stroke-width', 1);
+      });
+    }
+
+    async function initWorldMap() {
+      const svgEl = document.getElementById('world-map-svg');
+      const loadingEl = document.getElementById('map-loading-overlay');
+      const width = 600;
+      const height = 500;
+
+      mapSvg = d3.select(svgEl);
+      mapSvg.selectAll('*').remove();
+
+      const defs = mapSvg.append('defs');
+      defs.append('clipPath')
+        .attr('id', 'flag-circle-clip')
+        .attr('clipPathUnits', 'objectBoundingBox')
+        .append('circle')
+        .attr('cx', 0.5)
+        .attr('cy', 0.5)
+        .attr('r', 0.5);
+
+      mapG = mapSvg.append('g').attr('id', 'map-zoom-layer');
+
+      mapG.append('rect')
+        .attr('x', -1200)
+        .attr('y', -1200)
+        .attr('width', 3600)
+        .attr('height', 3400)
+        .attr('fill', '#000000');
+
+      const gridG = mapG.append('g').attr('stroke', '#1F1F1F').attr('stroke-width', 0.6).attr('stroke-dasharray', '3 3');
+      [100, 200, 300, 400].forEach(y => {
+        gridG.append('line').attr('x1', -600).attr('x2', 1200).attr('y1', y).attr('y2', y);
+      });
+      [120, 240, 360, 480].forEach(x => {
+        gridG.append('line').attr('x1', x).attr('x2', x).attr('y1', -500).attr('y2', 1000);
+      });
+
+      mapProjection = d3.geoNaturalEarth1()
+        .scale(152)
+        .translate([width / 2 - 15, height / 2 + 25]);
+
+      mapPathGenerator = d3.geoPath().projection(mapProjection);
+
+      zoomBehavior = d3.zoom()
+        .scaleExtent([0.85, 14])
+        .on('start', () => {
+          isMapDragging = false;
+        })
+        .on('zoom', (event) => {
+          if (event.sourceEvent) {
+            isMapDragging = true;
+          }
+          currentZoomK = event.transform.k;
+          mapG.attr('transform', event.transform);
+          document.getElementById('zoom-level-indicator').textContent = `${currentZoomK.toFixed(1)}x`;
+          updateBadgeScales();
+        })
+        .on('end', () => {
+          setTimeout(() => { isMapDragging = false; }, 40);
+        });
+
+      mapSvg.call(zoomBehavior);
+
+      document.getElementById('zoom-in-btn').onclick = () => {
+        mapSvg.transition().duration(250).call(zoomBehavior.scaleBy, 1.5);
+      };
+      document.getElementById('zoom-out-btn').onclick = () => {
+        mapSvg.transition().duration(250).call(zoomBehavior.scaleBy, 0.67);
+      };
+      document.getElementById('zoom-reset-btn').onclick = () => {
+        mapSvg.transition().duration(300).call(zoomBehavior.transform, d3.zoomIdentity);
+      };
+
+      const numToCountry = {};
+      COUNTRIES_DATA.forEach(c => { numToCountry[c.numId] = c; });
+
+      // Tüm ülkeler için varsayılan koordinat merkezlerini belirle
+      COUNTRIES_DATA.forEach(c => {
+        const p = mapProjection(c.coords) || [300, 250];
+        c.px = p[0];
+        c.py = p[1];
+      });
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        const worldData = await res.json();
+        const rawFeatures = topojson.feature(worldData, worldData.objects.countries).features;
+        worldCountriesFeatures = rawFeatures.filter(f => String(f.id) !== '010');
+
+        const mappedIds = new Set();
+
+        mapG.append('g')
+          .attr('id', 'countries-layer')
+          .selectAll('path')
+          .data(worldCountriesFeatures)
+          .enter()
+          .append('path')
+          .attr('d', mapPathGenerator)
+          .attr('class', 'country-path')
+          .attr('data-iso', d => {
+            const numId = String(d.id).padStart(3, '0');
+            const c = numToCountry[numId];
+            if (c) {
+              mappedIds.add(c.id);
+              const mainPoly = getBestCountryPolygon(d);
+              const centroid = mapPathGenerator.centroid(mainPoly);
+              if (centroid && !isNaN(centroid[0]) && !isNaN(centroid[1])) {
+                c.px = centroid[0];
+                c.py = centroid[1];
+              }
+              return c.id;
+            }
+            return 'NONE';
+          })
+          .attr('stroke', '#333333')
+          .attr('stroke-width', 0.45)
+          .on('click', (event, d) => {
+            if (isMapDragging) return;
+            event.stopPropagation();
+            const numId = String(d.id).padStart(3, '0');
+            const c = numToCountry[numId];
+            if (c) {
+              selectCountryOnMap(c.id, true);
+            }
+          });
+
+        const microCountries = COUNTRIES_DATA.filter(c => !mappedIds.has(c.id));
+        mapG.append('g')
+          .attr('id', 'microstates-layer')
+          .selectAll('circle')
+          .data(microCountries)
+          .enter()
+          .append('circle')
+          .attr('class', 'microstate-territory')
+          .attr('data-iso', d => d.id)
+          .attr('cx', d => d.px)
+          .attr('cy', d => d.py)
+          .attr('r', 3.4)
+          .attr('stroke', '#333333')
+          .attr('stroke-width', 0.5)
+          .on('click', (event, d) => {
+            if (isMapDragging) return;
+            event.stopPropagation();
+            selectCountryOnMap(d.id, true);
+          });
+
+        loadingEl.style.display = 'none';
+        renderCountryBadgesOnMap();
+        updateMapVisuals();
+        initSupplyPlaneSystem();
+      } catch (err) {
+        renderFallbackContinents();
+        loadingEl.style.display = 'none';
+        renderCountryBadgesOnMap();
+        updateMapVisuals();
+        initSupplyPlaneSystem();
+      }
+    }
+
+    function renderCountryBadgesOnMap() {
+      if (!mapG) return;
+      mapG.selectAll('#country-badges-layer').remove();
+
+      const badgesG = mapG.append('g').attr('id', 'country-badges-layer');
+
+      const groups = badgesG.selectAll('g.country-badge-group')
+        .data(COUNTRIES_DATA)
+        .enter()
+        .append('g')
+        .attr('class', 'country-badge-group')
+        .attr('data-iso', d => d.id)
+        .attr('transform', d => `translate(${d.px}, ${d.py})`)
+        .on('click', (event, d) => {
+          if (isMapDragging) return;
+          event.stopPropagation();
+          selectCountryOnMap(d.id, true);
+        });
+
+      groups.append('circle')
+        .attr('class', 'badge-outer-ring')
+        .attr('cx', 0)
+        .attr('cy', 0)
+        .attr('r', 6.4)
+        .attr('fill', '#0D0D0D')
+        .attr('stroke', '#D4A359')
+        .attr('stroke-width', 1.2);
+
+      groups.append('image')
+        .attr('class', 'badge-flag-img')
+        .attr('href', d => getFlagUrl(d.iso2))
+        .attr('x', -5.4)
+        .attr('y', -5.4)
+        .attr('width', 10.8)
+        .attr('height', 10.8)
+        .attr('preserveAspectRatio', 'xMidYMid slice')
+        .attr('clip-path', 'url(#flag-circle-clip)');
+
+      updateBadgeScales();
+    }
+
+    function updateBadgeScales() {
+      if (!mapG) return;
+      const scaleFactor = Math.max(0.28, Math.min(1.05, 1 / Math.pow(currentZoomK, 0.72)));
+
+      mapG.selectAll('g.country-badge-group')
+        .attr('transform', d => `translate(${d.px}, ${d.py}) scale(${scaleFactor})`)
+        .style('opacity', d => {
+          if (d.id === gameState.selected || gameState.owned.includes(d.id)) return 1;
+          if (!d.isMicro) return 1;
+          return currentZoomK >= 2.1 ? 1 : 0.48;
+        });
+    }
+
+    function updateMapVisuals() {
+      if (!mapG) return;
+
+      mapG.selectAll('path.country-path, circle.microstate-territory')
+        .attr('fill', function () {
+          const iso = this.getAttribute('data-iso');
+          if (!iso || iso === 'NONE') return '#141414';
+          if (gameState.owned.includes(iso)) return '#DC2626';
+          if (iso === gameState.selected) return '#D4A359';
+          return '#1C1C1C';
+        })
+        .attr('stroke', function () {
+          const iso = this.getAttribute('data-iso');
+          if (gameState.owned.includes(iso)) return '#FCA5A5';
+          if (iso === gameState.selected) return '#F5F5F5';
+          return '#333333';
+        })
+        .attr('stroke-width', function () {
+          const iso = this.getAttribute('data-iso');
+          if (iso === gameState.selected) return 0.9;
+          if (gameState.owned.includes(iso)) return 0.65;
+          return 0.45;
+        })
+        .classed('selected-country-glow', function () {
+          return this.getAttribute('data-iso') === gameState.selected;
+        });
+
+      mapG.selectAll('g.country-badge-group').each(function (d) {
+        const isOwned = gameState.owned.includes(d.id);
+        const isSelected = d.id === gameState.selected;
+        const ring = d3.select(this).select('.badge-outer-ring');
+
+        if (isOwned) {
+          ring.attr('stroke', '#EF4444').attr('stroke-width', 1.9).attr('fill', '#7F1D1D');
+        } else if (isSelected) {
+          ring.attr('stroke', '#F5F5F5').attr('stroke-width', 2.0).attr('fill', '#D4A359');
+        } else {
+          ring.attr('stroke', '#737373').attr('stroke-width', 1.0).attr('fill', '#0D0D0D');
+        }
+      });
+
+      updateBadgeScales();
+    }
+
+    function selectCountryOnMap(countryId, openModal = false) {
+      gameState.selected = countryId;
+      saveState();
+      playGameSfx('click');
+      triggerHaptic(12);
+      renderSelectedCountryCard();
+      updateMapVisuals();
+      if (openModal) {
+        openCountryModal(countryId);
+      }
+    }
+
+    // =========================================================================
+    // 10. HARİTADA PARLAYAN İKMAL UÇAĞI & REKLAM İZLE KAZAN SİSTEMİ
+    // =========================================================================
+    function calculateSupplyRewardAmount() {
+      const rate = Math.max(5, calculateIncomePerSecond());
+      const ownedBonus = Math.max(1, gameState.owned.length) * 140;
+      const rawReward = 450 + ownedBonus + rate * 25;
+      return Math.round(rawReward / 50) * 50;
+    }
+
+    function initSupplyPlaneSystem() {
+      if (supplyPlaneSchedulerTimer) clearInterval(supplyPlaneSchedulerTimer);
+      setTimeout(() => {
+        if (!activeSupplyPlane && !isWatchingSupplyAd) {
+          spawnGlowingSupplyPlane();
+        }
+      }, 2500);
+
+      supplyPlaneSchedulerTimer = setInterval(() => {
+        if (!activeSupplyPlane && !isWatchingSupplyAd) {
+          spawnGlowingSupplyPlane();
+        }
+      }, 60000);
+    }
+
+    function spawnGlowingSupplyPlane() {
+      if (!mapG) return;
+      removeSupplyPlaneFromMap();
+
+      const fromLeft = Math.random() > 0.35;
+      const startX = fromLeft ? -45 : 645;
+      const endX = fromLeft ? 645 : -45;
+      const startY = 85 + Math.random() * 270;
+      const endY = 85 + Math.random() * 270;
+
+      const dx = endX - startX;
+      const dy = endY - startY;
+      const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+      const reward = calculateSupplyRewardAmount();
+
+      activeSupplyPlane = {
+        startX,
+        startY,
+        endX,
+        endY,
+        angleDeg,
+        reward,
+        startTime: performance.now(),
+        duration: 16500,
+        paused: false,
+        pausedElapsed: 0
+      };
+
+      const layer = mapG.append('g')
+        .attr('id', 'supply-plane-layer')
+        .attr('class', 'supply-plane-glow')
+        .attr('transform', `translate(${startX}, ${startY})`)
+        .on('click', (event) => {
+          event.stopPropagation();
+          openSupplyPlaneModal();
+        })
+        .on('touchstart', (event) => {
+          event.stopPropagation();
+          openSupplyPlaneModal();
+        });
+
+      layer.append('circle')
+        .attr('cx', 0)
+        .attr('cy', 0)
+        .attr('r', 26)
+        .attr('fill', 'rgba(212, 163, 89, 0.01)');
+
+      layer.append('circle')
+        .attr('cx', 0)
+        .attr('cy', 0)
+        .attr('r', 17)
+        .attr('fill', 'rgba(212, 163, 89, 0.12)')
+        .attr('stroke', '#F3D08A')
+        .attr('stroke-width', 1.1)
+        .attr('stroke-dasharray', '4 3');
+
+      const shadowG = layer.append('g')
+        .attr('transform', `translate(-5, 9) rotate(${angleDeg}) scale(0.86)`)
+        .attr('opacity', 0.42);
+      shadowG.append('path')
+        .attr('d', 'M17 0 C15 -1.4 10 -2.2 4 -2.2 L-5 -15 L-8.5 -15 L-3.5 -2.2 L-11 -2 L-15.5 -6.5 L-17.5 -6.5 L-15 0 L-17.5 6.5 L-15.5 6.5 L-11 2 L-3.5 2.2 L-8.5 15 L-5 15 L4 2.2 C10 2.2 15 1.4 17 0 Z')
+        .attr('fill', '#000000');
+
+      const planeIconG = layer.append('g')
+        .attr('transform', `rotate(${angleDeg})`);
+
+      planeIconG.append('line')
+        .attr('x1', -34).attr('y1', -6.2).attr('x2', -6).attr('y2', -6.2)
+        .attr('stroke', 'rgba(255, 245, 214, 0.55)').attr('stroke-width', 1.5).attr('stroke-linecap', 'round');
+      planeIconG.append('line')
+        .attr('x1', -34).attr('y1', 6.2).attr('x2', -6).attr('y2', 6.2)
+        .attr('stroke', 'rgba(255, 245, 214, 0.55)').attr('stroke-width', 1.5).attr('stroke-linecap', 'round');
+
+      planeIconG.append('ellipse').attr('cx', -6.5).attr('cy', -6.2).attr('rx', 2.4).attr('ry', 1.1).attr('fill', '#FBBF24');
+      planeIconG.append('ellipse').attr('cx', -6.5).attr('cy', 6.2).attr('rx', 2.4).attr('ry', 1.1).attr('fill', '#FBBF24');
+
+      planeIconG.append('rect').attr('x', -5.2).attr('y', -7.6).attr('width', 6.5).attr('height', 2.8).attr('rx', 1.2).attr('fill', '#78716C').attr('stroke', '#E7E5E4').attr('stroke-width', 0.5);
+      planeIconG.append('rect').attr('x', -5.2).attr('y', 4.8).attr('width', 6.5).attr('height', 2.8).attr('rx', 1.2).attr('fill', '#78716C').attr('stroke', '#E7E5E4').attr('stroke-width', 0.5);
+
+      planeIconG.append('path')
+        .attr('d', 'M4.5 -2.1 L-5.2 -15.5 L-8.6 -15.5 L-3.6 -2.1 L-11.2 -1.9 L-15.6 -6.8 L-17.8 -6.8 L-15.2 0 L-17.8 6.8 L-15.6 6.8 L-11.2 1.9 L-3.6 2.1 L-8.6 15.5 L-5.2 15.5 L4.5 2.1 Z')
+        .attr('fill', '#D6D3D1').attr('stroke', '#F5F5F4').attr('stroke-width', 0.65).attr('stroke-linejoin', 'round');
+
+      planeIconG.append('line').attr('x1', -2.5).attr('y1', -3.5).attr('x2', -6.8).attr('y2', -14.2).attr('stroke', '#D4A359').attr('stroke-width', 1.1);
+      planeIconG.append('line').attr('x1', -2.5).attr('y1', 3.5).attr('x2', -6.8).attr('y2', 14.2).attr('stroke', '#D4A359').attr('stroke-width', 1.1);
+
+      planeIconG.append('path')
+        .attr('d', 'M17.5 0 C15.2 -1.7 10.5 -2.4 4.5 -2.4 L-12.5 -2.1 C-14.8 -1.8 -16.5 -0.9 -17.5 0 C-16.5 0.9 -14.8 1.8 -12.5 2.1 L4.5 2.4 C10.5 2.4 15.2 1.7 17.5 0 Z')
+        .attr('fill', '#FAFAF9').attr('stroke', '#D4A359').attr('stroke-width', 0.75);
+
+      planeIconG.append('line').attr('x1', -13.5).attr('y1', 0).attr('x2', 8.5).attr('y2', 0).attr('stroke', '#D4A359').attr('stroke-width', 0.95);
+
+      planeIconG.append('path')
+        .attr('d', 'M13.2 0 C11.8 -1.05 9.6 -1.25 7.8 -1.1 C8.3 -0.4 8.3 0.4 7.8 1.1 C9.6 1.25 11.8 1.05 13.2 0 Z')
+        .attr('fill', '#1E293B').attr('stroke', '#93C5FD').attr('stroke-width', 0.45);
+
+      planeIconG.append('circle').attr('class', 'plane-nav-strobe').attr('cx', -6.8).attr('cy', -15.3).attr('r', 1.3).attr('fill', '#EF4444');
+      planeIconG.append('circle').attr('class', 'plane-nav-strobe').attr('cx', -6.8).attr('cy', 15.3).attr('r', 1.3).attr('fill', '#22C55E');
+
+      const hudPill = document.getElementById('supply-plane-hud-pill');
+      if (hudPill) {
+        hudPill.classList.remove('hidden');
+        hudPill.classList.add('flex');
+      }
+
+      function animateSupplyPlane(now) {
+        if (!activeSupplyPlane) return;
+        if (activeSupplyPlane.paused) {
+          supplyPlaneAnimId = requestAnimationFrame(animateSupplyPlane);
+          return;
+        }
+
+        const elapsed = now - activeSupplyPlane.startTime;
+        const t = Math.min(1, elapsed / activeSupplyPlane.duration);
+        const curX = activeSupplyPlane.startX + (activeSupplyPlane.endX - activeSupplyPlane.startX) * t;
+        const curY = activeSupplyPlane.startY + (activeSupplyPlane.endY - activeSupplyPlane.startY) * t;
+
+        const scaleComp = Math.max(0.45, Math.min(1.15, 1 / Math.pow(currentZoomK, 0.6)));
+        d3.select('#supply-plane-layer')
+          .attr('transform', `translate(${curX}, ${curY}) scale(${scaleComp})`);
+
+        if (t < 1) {
+          supplyPlaneAnimId = requestAnimationFrame(animateSupplyPlane);
+        } else {
+          removeSupplyPlaneFromMap();
+        }
+      }
+
+      supplyPlaneAnimId = requestAnimationFrame(animateSupplyPlane);
+    }
+
+    function removeSupplyPlaneFromMap() {
+      if (supplyPlaneAnimId) {
+        cancelAnimationFrame(supplyPlaneAnimId);
+        supplyPlaneAnimId = null;
+      }
+      if (mapG) {
+        mapG.selectAll('#supply-plane-layer').remove();
+      }
+      const hudPill = document.getElementById('supply-plane-hud-pill');
+      if (hudPill) {
+        hudPill.classList.add('hidden');
+        hudPill.classList.remove('flex');
+      }
+      activeSupplyPlane = null;
+    }
+
+    function openSupplyPlaneModal() {
+      if (!activeSupplyPlane) return;
+      activeSupplyPlane.paused = true;
+      activeSupplyPlane.pausedElapsed = performance.now() - activeSupplyPlane.startTime;
+
+      playGameSfx('click');
+      triggerHaptic(20);
+
+      const rewardVal = activeSupplyPlane.reward;
+      document.getElementById('supply-reward-amount-text').textContent = `+${rewardVal} Altın`;
+
+      document.getElementById('ad-watching-box').classList.add('hidden');
+      document.getElementById('ad-progress-bar').style.width = '0%';
+      const watchBtn = document.getElementById('watch-ad-earn-btn');
+      watchBtn.classList.remove('hidden');
+      watchBtn.disabled = false;
+      document.getElementById('close-supply-modal-btn').classList.remove('hidden');
+
+      const modal = document.getElementById('supply-plane-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      lucide.createIcons();
+    }
+
+    function closeSupplyPlaneModal() {
+      if (isWatchingSupplyAd) return;
+      const modal = document.getElementById('supply-plane-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+
+      if (activeSupplyPlane) {
+        activeSupplyPlane.startTime = performance.now() - activeSupplyPlane.pausedElapsed;
+        activeSupplyPlane.paused = false;
+      }
+    }
+
+    function startSupplyAdPlayback() {
+      if (!activeSupplyPlane || isWatchingSupplyAd) return;
+      isWatchingSupplyAd = true;
+      playGameSfx('click');
+      triggerHaptic(18);
+
+      const rewardToGrant = activeSupplyPlane.reward;
+      const watchBtn = document.getElementById('watch-ad-earn-btn');
+      const closeBtn = document.getElementById('close-supply-modal-btn');
+      const adBox = document.getElementById('ad-watching-box');
+      const countdownEl = document.getElementById('ad-countdown-text');
+      const progressBar = document.getElementById('ad-progress-bar');
+
+      watchBtn.classList.add('hidden');
+      closeBtn.classList.add('hidden');
+      adBox.classList.remove('hidden');
+
+      const totalSeconds = 5;
+      let remaining = totalSeconds;
+      countdownEl.textContent = `${remaining} sn`;
+      progressBar.style.width = '5%';
+
+      setTimeout(() => {
+        progressBar.style.width = '20%';
+      }, 50);
+
+      if (adCountdownTimer) clearInterval(adCountdownTimer);
+      adCountdownTimer = setInterval(() => {
+        remaining -= 1;
+        const pct = Math.min(100, Math.round(((totalSeconds - remaining) / totalSeconds) * 100));
+        progressBar.style.width = `${pct}%`;
+
+        if (remaining > 0) {
+          countdownEl.textContent = `${remaining} sn`;
+        } else {
+          clearInterval(adCountdownTimer);
+          adCountdownTimer = null;
+          isWatchingSupplyAd = false;
+
+          gameState.gold += rewardToGrant;
+          saveState();
+          playGameSfx('conquer');
+          triggerHaptic([35, 30, 55]);
+
+          removeSupplyPlaneFromMap();
+          const modal = document.getElementById('supply-plane-modal');
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+
+          renderAll();
+          spawnFloatingGold(rewardToGrant);
+          showToast(`Tebrikler! Reklam ödülü olarak +${rewardToGrant} 🪙 kazandın!`, 'gold');
+        }
+      }, 1000);
+    }
+
+    // =========================================================================
+    // 11. BAŞLATMA, FETİH VE ORDU AKSİYONLARI
+    // =========================================================================
+    function startWithCountry(countryId) {
+      const c = getCountryById(countryId);
+      gameState.home = c.id;
+      gameState.selected = c.id;
+      gameState.owned = [c.id];
+      gameState.ownedCars = [];
+      gameState.gold = 500;
+      gameState.trainingLevel = 1;
+      gameState.trainingPowerTotal = 0;
+      gameState.bonusPower = 0;
+      gameState.powerLost = 0;
+      saveState();
+      playGameSfx('conquer');
+      triggerHaptic([30, 40, 50]);
+      closeCountryModal();
+      renderAll();
+      const unlockedCarsCount = CARS_CATALOG.filter(car => car.countryId === c.id).length;
+      const carNote = unlockedCarsCount > 0 ? ` • Garajda ${unlockedCarsCount} yerli araba kilidi açıldı!` : '';
+      showToast(`${c.name} kırmızı bayrağınla kuruldu! (+5 🪙/sn kazanç başladı)${carNote}`, 'success');
+    }
+
+    function attackCountry(countryId) {
+      if (!gameState.home) {
+        showToast('Önce haritadan bir başlangıç ülkesi seçmelisin!', 'danger');
+        return;
+      }
+      const target = getCountryById(countryId);
+      if (gameState.owned.includes(target.id)) {
+        showToast(`${target.name} zaten kırmızı topraklarına katılmış.`, 'info');
+        return;
+      }
+
+      const myPower = calculateTotalPower();
+      if (myPower >= target.defense) {
+        gameState.powerLost = (gameState.powerLost || 0) + target.defense;
+        gameState.owned.push(target.id);
+        gameState.gold += target.reward;
+        const addedSec = getCountryIncomeContribution(target);
+        saveState();
+        playGameSfx('conquer');
+        triggerHaptic([40, 35, 70]);
+        closeCountryModal();
+        renderAll();
+        const remaining = calculateTotalPower();
+        const newlyUnlockedCars = CARS_CATALOG.filter(car => car.countryId === target.id);
+        const carMsg = newlyUnlockedCars.length > 0
+          ? ` 🚗 Garajda ${newlyUnlockedCars.map(x => x.brand).join(', ')} kilidi açıldı!`
+          : '';
+        showToast(`Zafer! ${target.name} fethedildi (+${addedSec} 🪙/sn)! Kalan Güç: ${remaining}.${carMsg}`, 'success');
+      } else {
+        playGameSfx('error');
+        triggerHaptic([60, 40, 60]);
+        const modalCard = document.getElementById('country-modal-card');
+        if (modalCard) {
+          modalCard.classList.remove('animate-shake');
+          void modalCard.offsetWidth;
+          modalCard.classList.add('animate-shake');
+        }
+        const diff = target.defense - myPower;
+        showToast(`Saldırı başarısız! ${target.name} için ${diff} güç daha gerekiyor.`, 'danger');
+      }
+    }
+
+    function upgradeGlobalTraining() {
+      if (!gameState.home) {
+        showToast('Önce haritadan bir başlangıç ülkesi seçmelisin.', 'danger');
+        return;
+      }
+      const currentLevel = gameState.trainingLevel || 1;
+      const cost = getTrainingUpgradeCost();
+      const powerGain = getTrainingNextGain(currentLevel);
+
+      if (gameState.gold < cost) {
+        playGameSfx('error');
+        triggerHaptic(40);
+        showToast(`Yetersiz altın! ${cost - Math.floor(gameState.gold)} 🪙 daha gerekli.`, 'danger');
+        return;
+      }
+      gameState.gold -= cost;
+      gameState.trainingPowerTotal = (gameState.trainingPowerTotal || 0) + powerGain;
+      gameState.trainingLevel = currentLevel + 1;
+      saveState();
+      playGameSfx('upgrade');
+      triggerHaptic(22);
+      renderAll();
+      showToast(`Ordu Eğitimi Sv.${gameState.trainingLevel} oldu! (+${powerGain} Güç)`, 'gold');
+    }
+
+    function buyPowerPackage(powerAmount, cost) {
+      if (!gameState.home) {
+        showToast('Önce haritadan bir başlangıç ülkesi seçmelisin.', 'danger');
+        return;
+      }
+      if (gameState.gold < cost) {
+        playGameSfx('error');
+        triggerHaptic(40);
+        showToast(`Yetersiz altın! ${cost - Math.floor(gameState.gold)} 🪙 daha gerekli.`, 'danger');
+        return;
+      }
+      gameState.gold -= cost;
+      gameState.bonusPower = (gameState.bonusPower || 0) + powerAmount;
+      saveState();
+      playGameSfx('upgrade');
+      triggerHaptic(20);
+      renderAll();
+    }
+
+    function resetGame() {
+      const keepSound = gameState.soundEnabled;
+      const keepVibe = gameState.vibrationEnabled;
+      localStorage.removeItem(STORAGE_KEY);
+      gameState = { ...getDefaultState(), soundEnabled: keepSound, vibrationEnabled: keepVibe };
+      saveState();
+      playGameSfx('click');
+      triggerHaptic(30);
+      document.getElementById('reset-modal').classList.add('hidden');
+      document.getElementById('reset-modal').classList.remove('flex');
+      switchTab('map');
+      renderAll();
+      showToast('Oyun sıfırlandı. Yeni başlangıç ülkeni seçebilirsin.', 'info');
+    }
+
+    // =========================================================================
+    // 6. SANİYELİK PASİF ALTIN KAZANCI MOTORU
+    // =========================================================================
+    function startPassiveIncomeLoop() {
+      setInterval(() => {
+        if (!gameState.home) return;
+        const ratePerSec = calculateIncomePerSecond();
+        if (ratePerSec <= 0) return;
+
+        gameState.gold += ratePerSec;
+        saveState();
+
+        document.getElementById('header-gold-val').textContent = Math.floor(gameState.gold);
+        spawnFloatingGold(ratePerSec);
+
+        if (currentTab === 'army') {
+          renderArmyTab();
+        }
+      }, 1000);
+    }
+
+    // =========================================================================
+    // 7. ARAYÜZ GÜNCELLEME (RENDER) FONKSİYONLARI
+    // =========================================================================
+    function renderHeader() {
+      const rate = calculateIncomePerSecond();
+      const ownedCount = gameState.owned.length;
+
+      document.getElementById('header-owned-val').textContent = `${ownedCount}/${COUNTRIES_DATA.length}`;
+      document.getElementById('header-gold-val').textContent = Math.floor(gameState.gold);
+      document.getElementById('header-income-rate').textContent = `+${rate}/sn`;
+
+      const powerBadge = document.getElementById('header-power-badge');
+      if (gameState.home) {
+        powerBadge.classList.remove('hidden');
+        powerBadge.classList.add('flex');
+        document.getElementById('header-power-val').textContent = calculateTotalPower();
+      } else {
+        powerBadge.classList.add('hidden');
+        powerBadge.classList.remove('flex');
+      }
+    }
+
+    function renderSelectedCountryCard() {
+      const c = getCountryById(gameState.selected);
+      const isStarted = Boolean(gameState.home);
+      const isOwned = gameState.owned.includes(c.id);
+      const myPower = calculateTotalPower();
+      const incomeGain = isStarted ? getCountryIncomeContribution(c) : 5;
+
+      const flagBox = document.getElementById('sel-card-flag');
+      flagBox.innerHTML = renderFlagHtml(c);
+      flagBox.className = `w-12 h-12 rounded-full bg-bg border-2 flex items-center justify-center overflow-hidden shadow-inner shrink-0 ${
+        isOwned ? 'border-[#EF4444]' : 'border-primary'
+      }`;
+      document.getElementById('sel-card-name').textContent = c.name;
+      document.getElementById('sel-card-def').textContent = c.defense;
+      document.getElementById('sel-card-income-sec').textContent = `+${incomeGain} 🪙/sn`;
+      document.getElementById('sel-card-rew').textContent = `+${c.reward} 🪙`;
+
+      const tagEl = document.getElementById('sel-card-tag');
+      const btnEl = document.getElementById('sel-card-action-btn');
+      const btnTextEl = document.getElementById('sel-card-action-text');
+
+      if (!isStarted) {
+        tagEl.textContent = 'BAŞLANGIÇ ÜLKESİ';
+        tagEl.className = 'text-[10px] font-bold tracking-[0.12em] text-primary uppercase';
+        btnEl.className = 'w-full py-3 px-4 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.99] text-black font-bold text-sm flex items-center justify-center gap-2 transition shadow-md';
+        btnTextEl.textContent = 'Bu ülkeyle başla';
+      } else if (isOwned) {
+        tagEl.textContent = c.id === gameState.home ? 'BAŞKENT (KIRMIZI)' : 'FETHEDİLDİ (KIRMIZI)';
+        tagEl.className = 'text-[10px] font-bold tracking-[0.12em] text-[#FCA5A5] uppercase';
+        btnEl.className = 'w-full py-3 px-4 rounded-xl bg-[#DC2626]/20 border border-[#EF4444]/60 text-[#FCA5A5] font-bold text-sm flex items-center justify-center gap-2 transition';
+        btnTextEl.textContent = `✓ Topraklarına Katıldı (+${incomeGain} 🪙/sn)`;
+      } else {
+        tagEl.textContent = `GÜCÜ: ${c.defense} • ZORLUK ${c.diff}/5`;
+        tagEl.className = 'text-[10px] font-bold tracking-[0.12em] text-danger uppercase';
+        if (myPower >= c.defense) {
+          btnEl.className = 'w-full py-3 px-4 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.99] text-black font-bold text-sm flex items-center justify-center gap-2 transition shadow-md';
+          btnTextEl.textContent = `FETHET (Kalan Güç: ${myPower - c.defense})`;
+        } else {
+          btnEl.className = 'w-full py-3 px-4 rounded-xl bg-danger/20 border border-danger text-foreground font-bold text-sm flex items-center justify-center gap-2 transition';
+          btnTextEl.textContent = `FETHET (Güç Yetersiz: ${myPower} / ${c.defense})`;
+        }
+      }
+    }
+
+    function renderArmyTab() {
+      const emptyEl = document.getElementById('army-empty-state');
+      const activeEl = document.getElementById('army-active-state');
+
+      if (!gameState.home) {
+        emptyEl.classList.remove('hidden');
+        activeEl.classList.add('hidden');
+        return;
+      }
+
+      emptyEl.classList.add('hidden');
+      activeEl.classList.remove('hidden');
+
+      document.getElementById('army-total-power').textContent = calculateTotalPower();
+      document.getElementById('army-income-summary').textContent = `Pasif Gelir: +${calculateIncomePerSecond()} 🪙/sn`;
+
+      const tLvl = gameState.trainingLevel || 1;
+      const tCost = getTrainingUpgradeCost();
+      const tGain = getTrainingNextGain(tLvl);
+      const canTrain = gameState.gold >= tCost;
+      document.getElementById('global-tech-level-badge').textContent = `Eğitim Sv. ${tLvl}`;
+      document.getElementById('global-training-label').textContent = `Süresiz Ordu Eğitimi Yükselt (+${tGain} Güç)`;
+      document.getElementById('global-training-cost').textContent = `${tCost} 🪙`;
+      const trainBtn = document.getElementById('global-training-upgrade-btn');
+      trainBtn.className = canTrain
+        ? 'w-full py-2.5 px-3 rounded-xl bg-bg hover:bg-muted border border-primary/70 text-primary font-bold text-xs flex items-center justify-between transition'
+        : 'w-full py-2.5 px-3 rounded-xl bg-bg border border-border text-mutedFg opacity-60 font-bold text-xs flex items-center justify-between transition cursor-not-allowed';
+
+      const packages = [
+        { id: 'pkg-btn-25', cost: 100 },
+        { id: 'pkg-btn-100', cost: 500 },
+        { id: 'pkg-btn-500', cost: 2000 }
+      ];
+      packages.forEach(pkg => {
+        const btn = document.getElementById(pkg.id);
+        if (!btn) return;
+        const canAfford = gameState.gold >= pkg.cost;
+        btn.className = canAfford
+          ? 'py-2.5 px-2 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.98] text-black font-bold text-xs flex flex-col items-center justify-center gap-0.5 transition shadow'
+          : 'py-2.5 px-2 rounded-xl bg-bg border border-border text-mutedFg opacity-60 font-bold text-xs flex flex-col items-center justify-center gap-0.5 transition cursor-not-allowed';
+      });
+
+      lucide.createIcons();
+    }
+
+    function renderEmpireTab() {
+      renderSettingsUI();
+      const emptyEl = document.getElementById('empire-empty-state');
+      const activeEl = document.getElementById('empire-active-state');
+
+      if (!gameState.home) {
+        emptyEl.classList.remove('hidden');
+        activeEl.classList.add('hidden');
+        return;
+      }
+
+      emptyEl.classList.add('hidden');
+      activeEl.classList.remove('hidden');
+
+      const capital = getCountryById(gameState.home);
+      const ownedCount = gameState.owned.length;
+      const totalCount = COUNTRIES_DATA.length;
+      const pct = Math.max(1, Math.round((ownedCount / totalCount) * 100));
+      const incomeSec = calculateIncomePerSecond();
+
+      document.getElementById('empire-capital-flag').innerHTML = renderFlagHtml(capital);
+      document.getElementById('empire-capital-name').textContent = capital.name;
+      document.getElementById('empire-progress-text').textContent = `%${pct} • ${ownedCount} / ${totalCount}`;
+      document.getElementById('empire-progress-bar').style.width = `${pct}%`;
+      document.getElementById('empire-income-val').textContent = `+${incomeSec} 🪙/sn`;
+      document.getElementById('empire-power-val').textContent = `${calculateTotalPower()} Güç`;
+      document.getElementById('owned-count-badge').textContent = `${ownedCount} ülke`;
+
+      const listEl = document.getElementById('owned-countries-list');
+      listEl.innerHTML = gameState.owned.map(id => {
+        const c = getCountryById(id);
+        const isCap = c.id === gameState.home;
+        const inc = getCountryIncomeContribution(c);
+        return `
+          <div onclick="openCountryModal('${c.id}')" class="bg-card border border-[#EF4444]/40 rounded-theme p-3 flex items-center justify-between cursor-pointer hover:border-[#EF4444] transition">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-bg border-2 border-[#EF4444] flex items-center justify-center overflow-hidden shrink-0">
+                ${renderFlagHtml(c)}
+              </div>
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-heading font-bold text-sm text-foreground">${c.name}</span>
+                  ${isCap ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-[#DC2626]/25 text-[#FCA5A5] font-bold">BAŞKENT</span>' : ''}
+                </div>
+                <span class="text-[11px] text-mutedFg">Ülke Gücü ${c.defense} • Zorluk ${c.diff}/5</span>
+              </div>
+            </div>
+            <span class="text-xs font-bold text-ownedBright">+${inc} 🪙/sn</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMapHeader() {
+      const eyebrow = document.getElementById('map-eyebrow');
+      const title = document.getElementById('map-title');
+      const subtitle = document.getElementById('map-subtitle');
+      const liveIncomeBadge = document.getElementById('live-income-badge');
+      const compassBadge = document.getElementById('compass-badge');
+      const quickPowerBar = document.getElementById('map-quick-power-bar');
+
+      if (!gameState.home) {
+        eyebrow.textContent = 'Komutan, hoş geldin';
+        title.textContent = 'Dünyayı fethet.';
+        subtitle.textContent = '195 ülkeden birini seç veya bayrak sembolüne dokun.';
+        liveIncomeBadge.classList.add('hidden');
+        liveIncomeBadge.classList.remove('flex');
+        compassBadge.classList.remove('hidden');
+        quickPowerBar.classList.add('hidden');
+      } else {
+        const cap = getCountryById(gameState.home);
+        const rate = calculateIncomePerSecond();
+        eyebrow.textContent = `${cap.name} İmparatorluğu`;
+        title.textContent = 'Dünyayı fethet.';
+        subtitle.textContent = `${gameState.owned.length} / ${COUNTRIES_DATA.length} ülke kırmızı bayrağın altında.`;
+        liveIncomeBadge.classList.remove('hidden');
+        liveIncomeBadge.classList.add('flex');
+        document.getElementById('map-income-sec-val').textContent = `+${rate} 🪙/sn`;
+        compassBadge.classList.add('hidden');
+
+        quickPowerBar.classList.remove('hidden');
+        document.getElementById('map-quick-power-val').textContent = `${calculateTotalPower()} Güç`;
+      }
+    }
+
+    function renderAll() {
+      renderHeader();
+      renderMapHeader();
+      renderSelectedCountryCard();
+      renderArmyTab();
+      renderGarageTab();
+      renderEmpireTab();
+      updateMapVisuals();
+      lucide.createIcons();
+    }
+
+    // =========================================================================
+    // 7B. GARAJ VE ÜLKE ARABALARI SİSTEMİ
+    // =========================================================================
+    function setGarageFilter(filterKey) {
+      currentGarageFilter = filterKey;
+      playGameSfx('click');
+      triggerHaptic(10);
+      renderGarageTab();
+      lucide.createIcons();
+    }
+
+    function buyGarageCar(carId) {
+      if (!gameState.home) {
+        showToast('Önce haritadan bir başlangıç ülkesi seçmelisin!', 'danger');
+        return;
+      }
+      const car = CARS_CATALOG.find(c => c.id === carId);
+      if (!car) return;
+
+      const country = getCountryById(car.countryId);
+      const isUnlocked = gameState.owned.includes(car.countryId);
+      if (!isUnlocked) {
+        playGameSfx('error');
+        triggerHaptic(35);
+        showToast(`Kilitli! Bu arabayı almak için önce ${country.name} ülkesini fethetmelisin.`, 'danger');
+        return;
+      }
+
+      if (!Array.isArray(gameState.ownedCars)) {
+        gameState.ownedCars = [];
+      }
+
+      if (gameState.ownedCars.includes(car.id)) {
+        showToast(`${car.brand} ${car.model} zaten garajında bulunuyor.`, 'info');
+        return;
+      }
+
+      if (gameState.gold < car.price) {
+        playGameSfx('error');
+        triggerHaptic(40);
+        showToast(`Yetersiz altın! ${car.price - Math.floor(gameState.gold)} 🪙 daha gerekli.`, 'danger');
+        return;
+      }
+
+      gameState.gold -= car.price;
+      gameState.ownedCars.push(car.id);
+      saveState();
+      playGameSfx('conquer');
+      triggerHaptic([25, 30, 45]);
+      renderAll();
+      showToast(`🚗 ${car.brand} ${car.model} garajına eklendi! (+${car.powerBonus} Güç, +${car.incomeBonus} 🪙/sn)`, 'gold');
+    }
+
+    function renderCarSvgIllustration(accentColor, isLocked) {
+      const bodyColor = isLocked ? '#262626' : accentColor;
+      const strokeColor = isLocked ? '#525252' : '#F5F5F5';
+      return `
+        <svg viewBox="0 0 120 48" class="w-24 h-10 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="60" cy="42" rx="46" ry="3.5" fill="#000000" fill-opacity="0.65" />
+          <path d="M14 31 L18 22 L36 14 L74 14 L96 22 L108 26 L108 33 L14 33 Z" fill="${bodyColor}" stroke="${strokeColor}" stroke-width="1.3" stroke-linejoin="round" />
+          <path d="M38 16 L71 16 L86 22 L33 22 Z" fill="#0A0A0A" stroke="${strokeColor}" stroke-width="0.8" />
+          <circle cx="32" cy="34" r="7.5" fill="#0D0D0D" stroke="${strokeColor}" stroke-width="1.6" />
+          <circle cx="32" cy="34" r="3" fill="${bodyColor}" />
+          <circle cx="88" cy="34" r="7.5" fill="#0D0D0D" stroke="${strokeColor}" stroke-width="1.6" />
+          <circle cx="88" cy="34" r="3" fill="${bodyColor}" />
+          <rect x="103" y="26" width="4" height="2.5" rx="1" fill="#FDE047" />
+        </svg>
+      `;
+    }
+
+    function renderGarageTab() {
+      const listEl = document.getElementById('garage-cars-list');
+      if (!listEl) return;
+
+      const ownedCars = gameState.ownedCars || [];
+      const totalCarPower = ownedCars.reduce((sum, id) => {
+        const c = CARS_CATALOG.find(item => item.id === id);
+        return sum + (c ? c.powerBonus : 0);
+      }, 0);
+      const totalCarIncome = ownedCars.reduce((sum, id) => {
+        const c = CARS_CATALOG.find(item => item.id === id);
+        return sum + (c ? c.incomeBonus : 0);
+      }, 0);
+
+      const summaryEl = document.getElementById('garage-bonus-summary');
+      if (summaryEl) {
+        summaryEl.textContent = `+${totalCarPower} Güç • +${totalCarIncome}/sn`;
+      }
+
+      const filters = ['all', 'unlocked', 'owned', 'locked'];
+      filters.forEach(f => {
+        const btn = document.getElementById(`garage-filter-${f}`);
+        if (!btn) return;
+        if (f === currentGarageFilter) {
+          btn.className = 'px-3 py-1.5 rounded-full text-[11px] font-bold bg-primary text-black shrink-0 transition';
+        } else {
+          btn.className = 'px-3 py-1.5 rounded-full text-[11px] font-semibold bg-card border border-border text-mutedFg hover:text-foreground shrink-0 transition';
+        }
+      });
+
+      const filteredCars = CARS_CATALOG.filter(car => {
+        const isUnlocked = gameState.owned.includes(car.countryId);
+        const isOwnedCar = ownedCars.includes(car.id);
+        if (currentGarageFilter === 'unlocked') return isUnlocked && !isOwnedCar;
+        if (currentGarageFilter === 'owned') return isOwnedCar;
+        if (currentGarageFilter === 'locked') return !isUnlocked;
+        return true;
+      });
+
+      if (filteredCars.length === 0) {
+        listEl.innerHTML = `
+          <div class="bg-card border border-border rounded-theme p-6 text-center space-y-2">
+            <p class="font-heading font-bold text-sm text-foreground">Bu kategoride araç bulunamadı</p>
+            <p class="text-xs text-mutedFg">Haritadan yeni ülkeler fethederek yerli üretim araçların kilidini açabilirsin.</p>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = filteredCars.map(car => {
+        const country = getCountryById(car.countryId);
+        const isUnlocked = gameState.owned.includes(car.countryId);
+        const isOwnedCar = ownedCars.includes(car.id);
+        const canAfford = gameState.gold >= car.price;
+        const starsHtml = '★'.repeat(car.tier) + '☆'.repeat(5 - car.tier);
+
+        let cardBorder = 'border-border';
+        if (isOwnedCar) cardBorder = 'border-ownedBright/70';
+        else if (isUnlocked) cardBorder = 'border-primary/50';
+
+        let actionHtml = '';
+        if (isOwnedCar) {
+          actionHtml = `
+            <div class="w-full py-2.5 px-3 rounded-xl bg-ownedBright/15 border border-ownedBright/50 text-ownedBright font-bold text-xs flex items-center justify-center gap-1.5">
+              <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+              <span>Garajında Aktif</span>
+            </div>
+          `;
+        } else if (!isUnlocked) {
+          actionHtml = `
+            <button onclick="selectCountryOnMap('${country.id}', true); switchTab('map');" class="w-full py-2.5 px-3 rounded-xl bg-bg hover:bg-muted border border-border text-mutedFg font-semibold text-xs flex items-center justify-center gap-1.5 transition">
+              <i data-lucide="lock" class="w-3.5 h-3.5 text-danger"></i>
+              <span>Kilidi Açmak İçin <strong class="text-foreground">${country.name}</strong> Ülkesini Fethet</span>
+            </button>
+          `;
+        } else {
+          actionHtml = `
+            <button
+              onclick="buyGarageCar('${car.id}')"
+              class="w-full py-2.5 px-3 rounded-xl ${canAfford ? 'bg-primary hover:bg-primaryDark active:scale-[0.99] text-black' : 'bg-bg border border-border text-mutedFg opacity-65 cursor-not-allowed'} font-bold text-xs flex items-center justify-between transition shadow"
+            >
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+                <span>Satın Al</span>
+              </span>
+              <span class="font-heading text-sm font-bold">${car.price.toLocaleString('tr-TR')} 🪙</span>
+            </button>
+          `;
+        }
+
+        return `
+          <div class="bg-card border ${cardBorder} rounded-theme p-3.5 space-y-3 shadow-md ${!isUnlocked ? 'opacity-80' : ''}">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="w-6 h-6 rounded-full border ${isUnlocked ? 'border-[#EF4444]' : 'border-border'} overflow-hidden shrink-0">
+                  ${renderFlagHtml(country)}
+                </div>
+                <span class="text-[11px] font-semibold text-mutedFg truncate">${country.name} Üretimi</span>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-bg border border-border text-primary">${car.quality}</span>
+                <span class="text-[10px] text-primary tracking-tighter">${starsHtml}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="text-[10px] font-bold tracking-wider text-mutedFg uppercase">${car.brand}</div>
+                <h3 class="font-heading font-bold text-base text-foreground truncate">${car.model}</h3>
+                <div class="flex items-center gap-2.5 text-[11px] mt-1">
+                  <span class="text-primary font-bold">+${car.powerBonus} Güç</span>
+                  <span class="text-mutedFg">•</span>
+                  <span class="text-ownedBright font-bold">+${car.incomeBonus} 🪙/sn</span>
+                </div>
+              </div>
+              ${renderCarSvgIllustration(car.color, !isUnlocked)}
+            </div>
+
+            ${actionHtml}
+          </div>
+        `;
+      }).join('');
+    }
+
+    // =========================================================================
+    // 8. KOMPAKT TAKTİK ÜLKE PENCERESİ (FETHET & KALAN GÜÇ)
+    // =========================================================================
+    function openCountryModal(countryId) {
+      modalCountryId = countryId;
+      const c = getCountryById(countryId);
+      const isStarted = Boolean(gameState.home);
+      const isOwned = gameState.owned.includes(c.id);
+      const myPower = calculateTotalPower();
+      const incomeGain = isStarted ? getCountryIncomeContribution(c) : 5;
+
+      const flagRing = document.getElementById('modal-flag-ring');
+      flagRing.innerHTML = renderFlagHtml(c);
+      flagRing.className = `w-20 h-20 rounded-full bg-card border-[3px] flex items-center justify-center overflow-hidden shadow-lg mb-2.5 ${
+        isOwned ? 'border-[#EF4444]' : 'border-primary'
+      }`;
+
+      document.getElementById('modal-name').textContent = c.name;
+      document.getElementById('modal-difficulty').textContent = `Zorluk seviyesi ${c.diff} / 5`;
+      document.getElementById('modal-defense').textContent = c.defense;
+      document.getElementById('modal-army-power').textContent = myPower;
+      document.getElementById('modal-reward').textContent = `+${c.reward} 🪙`;
+      document.getElementById('modal-income').textContent = `+${incomeGain} 🪙/sn`;
+
+      const postCombatRow = document.getElementById('modal-post-combat-row');
+      const remainingPowerEl = document.getElementById('modal-remaining-power');
+
+      const tagEl = document.getElementById('modal-tag');
+      const noteEl = document.getElementById('modal-note-box');
+      const btnEl = document.getElementById('modal-action-btn');
+      const btnTextEl = document.getElementById('modal-action-text');
+
+      if (!isStarted) {
+        postCombatRow.classList.add('hidden');
+        tagEl.textContent = 'BAŞLANGIÇ ÜLKESİ';
+        tagEl.className = 'text-[10px] font-bold tracking-[0.14em] text-primary uppercase';
+        noteEl.textContent = 'Bu ülkeyi seçerek oyuna başlayabilirsin. Başlangıçta saniyede +5 altın kazanmaya başlarsın.';
+        btnEl.className = 'w-full py-3.5 px-4 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.99] text-[#101916] font-bold text-sm flex items-center justify-center gap-2 transition shadow-lg';
+        btnTextEl.textContent = 'Bu ülkeyle başla';
+        btnEl.onclick = () => startWithCountry(c.id);
+      } else if (isOwned) {
+        postCombatRow.classList.add('hidden');
+        tagEl.textContent = c.id === gameState.home ? 'BAŞKENTİN (KIRMIZI)' : 'FETHEDİLEN ÜLKE (KIRMIZI)';
+        tagEl.className = 'text-[10px] font-bold tracking-[0.14em] text-[#FCA5A5] uppercase';
+        noteEl.textContent = `Bu ülke kırmızı imparatorluğuna bağlı ve hazinene her saniye +${incomeGain} altın kazandırıyor.`;
+        btnEl.className = 'w-full py-3.5 px-4 rounded-xl bg-[#DC2626]/20 border border-[#EF4444]/60 text-[#FCA5A5] font-bold text-sm flex items-center justify-center gap-2 transition';
+        btnTextEl.textContent = '✓ Topraklarına Katıldı';
+        btnEl.onclick = () => closeCountryModal();
+      } else {
+        postCombatRow.classList.remove('hidden');
+        tagEl.textContent = `HEDEF ÜLKE • GÜCÜ: ${c.defense}`;
+        tagEl.className = 'text-[10px] font-bold tracking-[0.14em] text-danger uppercase';
+        if (myPower >= c.defense) {
+          const leftPower = myPower - c.defense;
+          remainingPowerEl.textContent = `${myPower} − ${c.defense} = ${leftPower} Güç`;
+          remainingPowerEl.className = 'font-heading font-bold text-sm text-primary';
+          noteEl.textContent = `Fethet emri verildiğinde ordun ${c.name} savunmasını aşar, ülke kırmızıya boyanır ve saniyelik kazancın +${incomeGain} 🪙/sn artar!`;
+          btnEl.className = 'w-full py-3.5 px-4 rounded-xl bg-primary hover:bg-primaryDark active:scale-[0.99] text-[#101916] font-bold text-sm flex items-center justify-center gap-2 transition shadow-lg';
+          btnTextEl.textContent = `FETHET (−${c.defense} Güç Harca)`;
+          btnEl.onclick = () => attackCountry(c.id);
+        } else {
+          const gap = c.defense - myPower;
+          remainingPowerEl.textContent = `Yetersiz (${gap} Güç Eksik)`;
+          remainingPowerEl.className = 'font-heading font-bold text-sm text-danger';
+          noteEl.textContent = `Ülkenin gücü (${c.defense}), senin ordu gücünden (${myPower}) ${gap} puan daha yüksek. Fethetmeden önce Ordu sekmesinden gücünü yükselt.`;
+          btnEl.className = 'w-full py-3.5 px-4 rounded-xl bg-danger/20 border border-danger text-foreground font-bold text-sm flex items-center justify-center gap-2 transition';
+          btnTextEl.textContent = `FETHET (Güç Yetersiz: ${myPower} / ${c.defense})`;
+          btnEl.onclick = () => attackCountry(c.id);
+        }
+      }
+
+      const modal = document.getElementById('country-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      lucide.createIcons();
+    }
+
+    function closeCountryModal() {
+      const modal = document.getElementById('country-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    // =========================================================================
+    // 9. SEKME GEÇİŞLERİ VE OLAY DİNLEYİCİLERİ
+    // =========================================================================
+    function switchTab(tabName) {
+      currentTab = tabName;
+      ['map', 'army', 'garage', 'empire'].forEach(t => {
+        const sec = document.getElementById(`tab-${t}`);
+        if (!sec) return;
+        if (t === tabName) {
+          sec.classList.remove('hidden');
+        } else {
+          sec.classList.add('hidden');
+        }
+      });
+
+      document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+        const target = btn.getAttribute('data-tab');
+        if (target === tabName) {
+          btn.classList.remove('text-mutedFg');
+          btn.classList.add('text-primary');
+        } else {
+          btn.classList.remove('text-primary');
+          btn.classList.add('text-mutedFg');
+        }
+      });
+
+      document.getElementById('main-content').scrollTo({ top: 0, behavior: 'smooth' });
+      renderAll();
+    }
+
+    document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        switchTab(btn.getAttribute('data-tab'));
+      });
+    });
+
+    document.getElementById('sel-card-info-btn').addEventListener('click', () => {
+      openCountryModal(gameState.selected);
+    });
+    document.getElementById('sel-card-action-btn').addEventListener('click', () => {
+      const c = getCountryById(gameState.selected);
+      if (!gameState.home) {
+        startWithCountry(c.id);
+      } else {
+        openCountryModal(c.id);
+      }
+    });
+
+    document.getElementById('close-modal-btn').addEventListener('click', closeCountryModal);
+    document.getElementById('country-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'country-modal') closeCountryModal();
+    });
+
+    document.getElementById('reset-game-btn').addEventListener('click', () => {
+      const rm = document.getElementById('reset-modal');
+      rm.classList.remove('hidden');
+      rm.classList.add('flex');
+    });
+    document.getElementById('cancel-reset-btn').addEventListener('click', () => {
+      const rm = document.getElementById('reset-modal');
+      rm.classList.add('hidden');
+      rm.classList.remove('flex');
+    });
+    document.getElementById('confirm-reset-btn').addEventListener('click', resetGame);
+
+    ['pointerdown', 'touchstart', 'keydown'].forEach(evtName => {
+      window.addEventListener(evtName, () => {
+        if (gameState.soundEnabled && !audioEngineStarted) {
+          initRoyaltyFreeAudio();
+        }
+      }, { once: false, passive: true });
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderAll();
+      initWorldMap();
+      startPassiveIncomeLoop();
+    });
+  </script>
+</body>
+</html>

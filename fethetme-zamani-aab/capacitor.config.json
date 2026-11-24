@@ -1,0 +1,10 @@
+{
+  "appId": "com.fethetmezamani.oyun",
+  "appName": "Fethetme Zamanı",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "android": {
+    "backgroundColor": "#000000",
+    "allowMixedContent": true
+  }
+}
